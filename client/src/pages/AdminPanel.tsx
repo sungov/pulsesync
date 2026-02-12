@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil, AlertTriangle } from "lucide-react";
 
 type AdminUser = {
   id: string;
@@ -33,6 +34,8 @@ export default function AdminPanel() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
 
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -98,9 +101,24 @@ export default function AdminPanel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "User Deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feedback"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/action-items"] });
+      setDeleteConfirmOpen(false);
+      setUserToDelete(null);
+      toast({ title: "User Deleted", description: "User and all associated data have been removed." });
+    },
+    onError: () => {
+      setDeleteConfirmOpen(false);
+      setUserToDelete(null);
+      toast({ title: "Error", description: "Failed to delete user", variant: "destructive" });
     },
   });
+
+  function confirmDelete(u: AdminUser) {
+    setUserToDelete(u);
+    setDeleteConfirmOpen(true);
+  }
 
   const addUserMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -383,7 +401,7 @@ export default function AdminPanel() {
                     <Button size="sm" data-testid={`button-approve-${u.id}`} onClick={() => approveMutation.mutate(u.id)} disabled={approveMutation.isPending}>
                       Approve
                     </Button>
-                    <Button size="sm" variant="outline" data-testid={`button-reject-${u.id}`} onClick={() => deleteMutation.mutate(u.id)} className="text-destructive">
+                    <Button size="sm" variant="outline" data-testid={`button-reject-${u.id}`} onClick={() => confirmDelete(u)} className="text-destructive">
                       Reject
                     </Button>
                   </div>
@@ -464,8 +482,8 @@ export default function AdminPanel() {
                             size="icon"
                             variant="ghost"
                             data-testid={`button-delete-${u.id}`}
-                            onClick={() => deleteMutation.mutate(u.id)}
-                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => confirmDelete(u)}
+                            className="text-muted-foreground"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -479,6 +497,47 @@ export default function AdminPanel() {
           </div>
         </div>
       </section>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Delete User Permanently
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                You are about to permanently delete <strong>{userToDelete?.firstName} {userToDelete?.lastName}</strong> ({userToDelete?.email}).
+              </span>
+              <span className="block font-medium text-destructive">
+                This will also permanently delete all associated data including:
+              </span>
+              <span className="block text-sm">
+                - All feedback submissions by this user<br />
+                - All manager reviews on their feedback<br />
+                - All action items assigned to or created by this user
+              </span>
+              <span className="block font-medium mt-2">This action cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-delete-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-delete-confirm"
+              className="bg-destructive text-destructive-foreground"
+              onClick={() => {
+                if (userToDelete) {
+                  deleteMutation.mutate(userToDelete.id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Delete User & All Data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

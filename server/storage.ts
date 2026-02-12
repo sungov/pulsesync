@@ -1,7 +1,7 @@
 import { type User, type UpsertUser, type InsertFeedback, type Feedback, type InsertManagerReview, type ManagerReview, type InsertActionItem, type ActionItem, type UpdateActionItemRequest } from "@shared/schema";
 import { db } from "./db";
 import { users, feedback, managerReviews, actionItems } from "@shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -59,6 +59,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
+    const user = await this.getUser(id);
+    if (!user) return;
+
+    const userFeedback = await db.select({ id: feedback.id }).from(feedback).where(eq(feedback.userId, id));
+    for (const fb of userFeedback) {
+      await db.delete(managerReviews).where(eq(managerReviews.feedbackId, fb.id));
+    }
+    await db.delete(feedback).where(eq(feedback.userId, id));
+
+    if (user.email) {
+      await db.delete(managerReviews).where(eq(managerReviews.mgrEmail, user.email));
+      await db.delete(actionItems).where(
+        or(eq(actionItems.empEmail, user.email), eq(actionItems.mgrEmail, user.email))
+      );
+    }
+
     await db.delete(users).where(eq(users.id, id));
   }
 
