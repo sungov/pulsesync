@@ -350,9 +350,9 @@ export default function EmployeeDashboard() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Activity className="w-4 h-4 text-primary" />
-                  Satisfaction & AI Sentiment
+                  Satisfaction & Wellness Score
                 </CardTitle>
-                <CardDescription>Your satisfaction score and AI-analyzed sentiment over time</CardDescription>
+                <CardDescription>Your satisfaction rating vs. AI-analyzed overall wellness</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
@@ -371,10 +371,15 @@ export default function EmployeeDashboard() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                       <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                        formatter={(value: number, name: string) => {
+                          if (name === "Wellness Score") return [`${value}/10`, name];
+                          return [`${value}/10`, name];
+                        }}
+                      />
                       <Legend wrapperStyle={{ fontSize: "12px" }} />
                       <Area type="monotone" dataKey="satisfaction" stroke="hsl(var(--primary))" fill="url(#satGrad)" strokeWidth={2} name="Satisfaction" dot={{ r: 3 }} />
-                      <Area type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-2))" fill="url(#sentGrad)" strokeWidth={2} name="AI Sentiment (0-10)" dot={{ r: 3 }} />
+                      <Area type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-2))" fill="url(#sentGrad)" strokeWidth={2} name="Wellness Score" dot={{ r: 3 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -392,23 +397,29 @@ export default function EmployeeDashboard() {
               <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
+                    <BarChart data={chartData} barCategoryGap="20%">
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                      <YAxis domain={[1, 5]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} className="text-muted-foreground"
+                        tickFormatter={(value: number) => {
+                          const labels = ["", "1", "2", "3", "4", "5"];
+                          return labels[value] || String(value);
+                        }}
+                      />
                       <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                         formatter={(value: number, name: string) => {
                           if (name === "Mood") {
                             const labels = ["", "Burned Out", "Challenged", "Neutral", "Good", "Great"];
-                            return [labels[value] || value, name];
+                            return [`${labels[value] || value} (${value}/5)`, name];
                           }
-                          return [value, name];
+                          const balLabels = ["", "Poor", "Fair", "Okay", "Good", "Excellent"];
+                          return [`${balLabels[value] || value} (${value}/5)`, name];
                         }}
                       />
                       <Legend wrapperStyle={{ fontSize: "12px" }} />
-                      <Line type="monotone" dataKey="mood" stroke="hsl(var(--chart-4))" strokeWidth={2} name="Mood" dot={{ r: 4, fill: "hsl(var(--chart-4))" }} />
-                      <Line type="monotone" dataKey="balance" stroke="hsl(var(--chart-5))" strokeWidth={2} name="Balance" dot={{ r: 4, fill: "hsl(var(--chart-5))" }} />
-                    </LineChart>
+                      <Bar dataKey="mood" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} name="Mood" />
+                      <Bar dataKey="balance" fill="hsl(var(--chart-5))" radius={[4, 4, 0, 0]} name="Balance" />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>

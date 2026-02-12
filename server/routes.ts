@@ -174,9 +174,32 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/feedback/check-period", isAuthenticated, async (req, res) => {
+    const userId = (req as any).user?.id;
+    const period = req.query.period as string;
+    if (!userId || !period) {
+      return res.status(400).json({ message: "period is required" });
+    }
+    const existing = await storage.getFeedbackByUserAndPeriod(userId, period);
+    if (existing) {
+      const review = await storage.getReviewByFeedbackId(existing.id);
+      return res.json({ exists: true, feedbackId: existing.id, reviewed: !!review });
+    }
+    res.json({ exists: false, feedbackId: null, reviewed: false });
+  });
+
   app.post(api.feedback.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.feedback.create.input.parse(req.body);
+
+      const existingFeedback = await storage.getFeedbackByUserAndPeriod(input.userId, input.submissionPeriod);
+      if (existingFeedback) {
+        const review = await storage.getReviewByFeedbackId(existingFeedback.id);
+        if (review) {
+          return res.status(403).json({ message: "This feedback has been reviewed by your manager and can no longer be modified." });
+        }
+        return res.status(409).json({ message: "You have already submitted feedback for this period." });
+      }
       
       const textToAnalyze = `
         Accomplishments: ${input.accomplishments}

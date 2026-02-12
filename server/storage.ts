@@ -111,6 +111,12 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(feedback).where(eq(feedback.userId, userId)).orderBy(desc(feedback.createdAt));
   }
 
+  async getFeedbackByUserAndPeriod(userId: string, period: string): Promise<Feedback | undefined> {
+    const [result] = await db.select().from(feedback)
+      .where(and(eq(feedback.userId, userId), eq(feedback.submissionPeriod, period)));
+    return result;
+  }
+
   async getAllFeedback(): Promise<Feedback[]> {
     return db.select().from(feedback).orderBy(desc(feedback.createdAt));
   }

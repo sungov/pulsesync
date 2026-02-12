@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCreateFeedback } from "@/hooks/use-pulse-data";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,8 @@ import {
   Briefcase,
   Scale,
   Smile,
+  CheckCircle2,
+  Lock,
 } from "lucide-react";
 
 const MOOD_LABELS = ["Burned Out", "Challenged", "Neutral", "Good", "Great"] as const;
@@ -63,6 +66,19 @@ export default function EmployeeFeedback() {
   const createFeedback = useCreateFeedback();
 
   const currentPeriod = format(new Date(), "MMM-yyyy");
+
+  const { data: periodCheck, isLoading: periodCheckLoading } = useQuery<{ exists: boolean; feedbackId: number | null; reviewed: boolean }>({
+    queryKey: ["/api/feedback/check-period", currentPeriod],
+    queryFn: async () => {
+      const res = await fetch(`/api/feedback/check-period?period=${currentPeriod}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to check period");
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+
+  const alreadySubmitted = periodCheck?.exists ?? false;
+  const isReviewed = periodCheck?.reviewed ?? false;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,11 +134,42 @@ export default function EmployeeFeedback() {
         </p>
       </header>
 
+      {periodCheckLoading ? (
+        <Card className="border-border/50 shadow-sm overflow-visible">
+          <div className="h-2 bg-gradient-to-r from-primary to-indigo-400 rounded-t-md" />
+          <CardContent className="py-16 text-center">
+            <SyncLoader />
+          </CardContent>
+        </Card>
+      ) : alreadySubmitted ? (
+        <Card className="border-border/50 shadow-sm overflow-visible" data-testid="card-already-submitted">
+          <div className={`h-2 rounded-t-md ${isReviewed ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-primary to-indigo-400"}`} />
+          <CardContent className="py-16 text-center space-y-4">
+            {isReviewed ? (
+              <>
+                <Lock className="w-12 h-12 mx-auto text-emerald-500/40" />
+                <p className="text-lg font-medium text-foreground">Feedback Reviewed & Locked</p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Your feedback for <span className="font-semibold text-primary">{currentPeriod}</span> has been reviewed by your manager and is now locked. You can view it in your dashboard.
+                </p>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-12 h-12 mx-auto text-primary/40" />
+                <p className="text-lg font-medium text-foreground">Already Submitted</p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  You've already submitted your monthly pulse for <span className="font-semibold text-primary">{currentPeriod}</span>. You can submit again next month.
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
       <div className="space-y-6">
           <Card className="border-border/50 shadow-sm overflow-visible">
             <div className="h-2 bg-gradient-to-r from-primary to-indigo-400 rounded-t-md" />
             <CardHeader>
-              <CardTitle>Weekly Check-in</CardTitle>
+              <CardTitle>Monthly Check-in</CardTitle>
               <CardDescription>Share your wins and challenges to help us support you better.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -407,13 +454,14 @@ export default function EmployeeFeedback() {
                     className="w-full md:w-auto font-semibold shadow-lg shadow-primary/25 transition-all"
                     data-testid="button-submit-feedback"
                   >
-                    Submit Weekly Pulse
+                    Submit Monthly Pulse
                   </Button>
                 </div>
               </form>
             </CardContent>
           </Card>
       </div>
+      )}
     </div>
   );
 }
