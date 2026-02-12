@@ -47,6 +47,7 @@ export interface IStorage {
   getKudosByUser(userId: string): Promise<any[]>;
 
   createManagerFeedback(data: InsertManagerFeedback): Promise<ManagerFeedbackEntry>;
+  updateManagerFeedback(id: number, data: { feedbackText: string; rating: number }): Promise<ManagerFeedbackEntry>;
   getManagerFeedbackBySubmitter(userId: string, period: string): Promise<ManagerFeedbackEntry | undefined>;
   getManagerFeedbackForSenior(managerEmail?: string, period?: string): Promise<any[]>;
   getManagerFeedbackSummary(): Promise<any[]>;
@@ -498,6 +499,14 @@ export class DatabaseStorage implements IStorage {
   async createManagerFeedback(data: InsertManagerFeedback): Promise<ManagerFeedbackEntry> {
     const [newItem] = await db.insert(managerFeedback).values(data).returning();
     return newItem;
+  }
+
+  async updateManagerFeedback(id: number, data: { feedbackText: string; rating: number }): Promise<ManagerFeedbackEntry> {
+    const [updated] = await db.update(managerFeedback)
+      .set({ feedbackText: data.feedbackText, rating: data.rating })
+      .where(eq(managerFeedback.id, id))
+      .returning();
+    return updated;
   }
 
   async getManagerFeedbackBySubmitter(userId: string, period: string): Promise<ManagerFeedbackEntry | undefined> {

@@ -979,7 +979,32 @@ export async function registerRoutes(
     const period = req.query.period as string;
     if (!period) return res.status(400).json({ message: "period is required" });
     const existing = await storage.getManagerFeedbackBySubmitter(user.id, period);
-    res.json({ submitted: !!existing });
+    res.json({
+      submitted: !!existing,
+      id: existing?.id ?? null,
+      feedbackText: existing?.feedbackText ?? null,
+      rating: existing?.rating ?? null,
+    });
+  });
+
+  app.put("/api/manager-feedback/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+      const existing = await storage.getManagerFeedbackBySubmitter(user.id, req.body.submissionPeriod);
+      if (!existing || existing.id !== id) {
+        return res.status(403).json({ message: "You can only edit your own manager feedback" });
+      }
+      const { feedbackText, rating } = req.body;
+      if (!feedbackText || typeof rating !== "number") {
+        return res.status(400).json({ message: "feedbackText and rating are required" });
+      }
+      const updated = await storage.updateManagerFeedback(id, { feedbackText, rating });
+      res.json({ message: "Manager feedback updated" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to update manager feedback" });
+    }
   });
 
   return httpServer;

@@ -103,7 +103,7 @@ export default function EmployeeFeedback() {
   const alreadySubmitted = periodCheck?.exists ?? false;
   const isReviewed = periodCheck?.reviewed ?? false;
 
-  const { data: mgrFeedbackCheck } = useQuery<{ submitted: boolean }>({
+  const { data: mgrFeedbackCheck } = useQuery<{ submitted: boolean; id: number | null; feedbackText: string | null; rating: number | null }>({
     queryKey: ["/api/manager-feedback/check", selectedPeriod],
     queryFn: async () => {
       const res = await fetch(`/api/manager-feedback/check?period=${selectedPeriod}`, { credentials: "include" });
@@ -141,12 +141,23 @@ export default function EmployeeFeedback() {
       setProcessSuggestions(existingFeedback.processSuggestions || "");
       setPtoCoverage(existingFeedback.ptoCoverage || "");
       setEditingFeedbackId(existingFeedback.id);
+      if (mgrFeedbackCheck?.submitted && mgrFeedbackCheck.feedbackText) {
+        setMgrFeedbackText(mgrFeedbackCheck.feedbackText);
+        setMgrRating([mgrFeedbackCheck.rating ?? 3]);
+      }
     }
-  }, [existingFeedback, isEditing]);
+  }, [existingFeedback, isEditing, mgrFeedbackCheck]);
 
   const updateFeedback = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("PUT", `/api/feedback/${editingFeedbackId}`, data);
+      if (user?.managerEmail && mgrFeedbackCheck?.id && mgrFeedbackText.trim()) {
+        await apiRequest("PUT", `/api/manager-feedback/${mgrFeedbackCheck.id}`, {
+          feedbackText: mgrFeedbackText.trim(),
+          rating: mgrRating[0],
+          submissionPeriod: selectedPeriod,
+        });
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -155,6 +166,7 @@ export default function EmployeeFeedback() {
       setEditingFeedbackId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/feedback/check-period"] });
       queryClient.invalidateQueries({ queryKey: ["/api/feedback"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/manager-feedback/check"] });
     },
     onError: (err: any) => {
       toast({ title: "Update Failed", description: err.message || "Could not update feedback.", variant: "destructive" });
@@ -605,13 +617,19 @@ export default function EmployeeFeedback() {
                           </span>
                         </div>
 
-                        {mgrFeedbackAlreadySubmitted ? (
+                        {mgrFeedbackAlreadySubmitted && !isEditing ? (
                           <div className="text-center py-4">
                             <CheckCircle2 className="w-8 h-8 mx-auto text-primary/40 mb-2" />
                             <p className="text-sm text-muted-foreground">You've already submitted manager feedback for this period.</p>
                           </div>
                         ) : (
                           <>
+                            {isEditing && mgrFeedbackAlreadySubmitted && (
+                              <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-500/10 rounded-md p-3">
+                                <Pencil className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
+                                <span>You can update your previously submitted anonymous manager feedback below.</span>
+                              </div>
+                            )}
                             <div className="space-y-2">
                               <Label className="flex items-center gap-2">
                                 <Star className="w-4 h-4 text-amber-500" />
