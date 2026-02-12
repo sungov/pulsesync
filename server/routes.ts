@@ -669,7 +669,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/all-employees", isAuthenticated, async (req, res) => {
     const search = req.query.search as string | undefined;
-    const data = await storage.getAllEmployeePerformanceSummary(search);
+    const period = req.query.period as string | undefined;
+    const data = await storage.getAllEmployeePerformanceSummary(search, period);
     const safeData = data.map((d: any) => ({
       id: d.id,
       firstName: d.first_name,

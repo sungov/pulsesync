@@ -389,10 +389,13 @@ export function useBlockerThemes(period?: string, groupBy: "dept" | "project" = 
 
 // === ALL EMPLOYEES PERFORMANCE ===
 
-export function useAllEmployeePerformance(search?: string) {
-  const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+export function useAllEmployeePerformance(search?: string, period?: string) {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  if (period) params.append("period", period);
+  const qs = params.toString() ? `?${params.toString()}` : "";
   return useQuery({
-    queryKey: ["/api/analytics/all-employees", search],
+    queryKey: ["/api/analytics/all-employees", search, period],
     queryFn: async () => {
       const res = await fetch(`/api/analytics/all-employees${qs}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch employee data");

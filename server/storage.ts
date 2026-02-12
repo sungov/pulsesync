@@ -39,7 +39,7 @@ export interface IStorage {
   getProjectAnalytics(period?: string): Promise<any[]>;
   getProjectAnalyticsForPeriods(periods: string[]): Promise<any[]>;
   getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]>;
-  getAllEmployeePerformanceSummary(search?: string): Promise<any[]>;
+  getAllEmployeePerformanceSummary(search?: string, period?: string): Promise<any[]>;
 
   createKudos(data: InsertKudos): Promise<Kudos>;
   getRecentKudos(limit?: number, startDate?: Date, endDate?: Date): Promise<any[]>;
@@ -336,10 +336,12 @@ export class DatabaseStorage implements IStorage {
     return result.rows;
   }
 
-  async getAllEmployeePerformanceSummary(search?: string): Promise<any[]> {
+  async getAllEmployeePerformanceSummary(search?: string, period?: string): Promise<any[]> {
     const searchFilter = search 
       ? sql`AND (LOWER(u.first_name) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.last_name) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.email) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.dept_code) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.project_code) LIKE ${`%${search.toLowerCase()}%`})`
       : sql``;
+    const periodFilter = period ? sql`AND f.submission_period = ${period}` : sql``;
+    const periodFilterSub = period ? sql`AND f2.submission_period = ${period}` : sql``;
     const result = await db.execute(sql`
       SELECT 
         u.id,
@@ -369,12 +371,12 @@ export class DatabaseStorage implements IStorage {
           AVG(f.workload_level) as avg_workload,
           AVG(f.work_life_balance) as avg_wlb,
           COUNT(f.id) as total_feedback,
-          (SELECT f2.ai_sentiment FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_sentiment,
-          (SELECT f2.sat_score FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_sat_score,
-          (SELECT f2.mood_score FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_mood,
-          (SELECT f2.submission_period FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_period
+          (SELECT f2.ai_sentiment FROM feedback f2 WHERE f2.user_id = u.id ${periodFilterSub} ORDER BY f2.created_at DESC LIMIT 1) as latest_sentiment,
+          (SELECT f2.sat_score FROM feedback f2 WHERE f2.user_id = u.id ${periodFilterSub} ORDER BY f2.created_at DESC LIMIT 1) as latest_sat_score,
+          (SELECT f2.mood_score FROM feedback f2 WHERE f2.user_id = u.id ${periodFilterSub} ORDER BY f2.created_at DESC LIMIT 1) as latest_mood,
+          (SELECT f2.submission_period FROM feedback f2 WHERE f2.user_id = u.id ${periodFilterSub} ORDER BY f2.created_at DESC LIMIT 1) as latest_period
         FROM feedback f
-        WHERE f.user_id = u.id
+        WHERE f.user_id = u.id ${periodFilter}
       ) perf ON true
       LEFT JOIN LATERAL (
         SELECT 

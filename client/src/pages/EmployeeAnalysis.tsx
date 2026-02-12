@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAllEmployeePerformance, useUsersList } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,15 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Users, Search, Eye, TrendingUp, TrendingDown, ArrowUpDown, Activity, Brain, ListTodo, Briefcase } from "lucide-react";
+import { format, subMonths } from "date-fns";
+
+function generatePeriodOptions() {
+  const now = new Date();
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = subMonths(now, i);
+    return format(d, "MMM-yyyy");
+  });
+}
 
 function getSentimentColor(score: number) {
   if (score >= 7) return "text-green-600 dark:text-green-400";
@@ -44,6 +53,9 @@ type SortDir = "asc" | "desc";
 type FilterRole = "all" | "EMPLOYEE" | "MANAGER";
 
 export default function EmployeeAnalysis() {
+  const [, setLocation] = useLocation();
+  const periodOptions = useMemo(() => generatePeriodOptions(), []);
+  const [period, setPeriod] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("sentiment");
@@ -51,7 +63,7 @@ export default function EmployeeAnalysis() {
   const [filterDept, setFilterDept] = useState<string>("all");
   const [filterRole, setFilterRole] = useState<FilterRole>("all");
 
-  const { data: employees, isLoading } = useAllEmployeePerformance(debouncedSearch || undefined);
+  const { data: employees, isLoading } = useAllEmployeePerformance(debouncedSearch || undefined, period !== "all" ? period : undefined);
   const { data: usersData } = useUsersList();
   const allUsersArr = (usersData as any[]) || [];
 
@@ -146,6 +158,17 @@ export default function EmployeeAnalysis() {
             data-testid="input-search-employee"
           />
         </div>
+        <Select value={period} onValueChange={setPeriod} data-testid="select-period">
+          <SelectTrigger className="w-[160px]" data-testid="select-period-trigger">
+            <SelectValue placeholder="Select period" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Periods</SelectItem>
+            {periodOptions.map(p => (
+              <SelectItem key={p} value={p} data-testid={`select-period-${p}`}>{p}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={filterDept} onValueChange={setFilterDept} data-testid="select-filter-dept">
           <SelectTrigger className="w-[160px]" data-testid="select-filter-dept-trigger">
             <SelectValue placeholder="Department" />
@@ -278,7 +301,12 @@ export default function EmployeeAnalysis() {
                   </TableHeader>
                   <TableBody>
                     {filtered.map((emp: any) => (
-                      <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
+                      <TableRow
+                        key={emp.id}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => setLocation(`/employee-progress/${emp.id}`)}
+                        data-testid={`row-employee-${emp.id}`}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-8 w-8">
