@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Flame, Plus, AlertTriangle, Star, ClipboardCheck, Eye, Pencil, ListTodo, Clock, CheckCircle2, Circle, Loader2, Ban, Trash2 } from "lucide-react";
+import { Flame, Plus, AlertTriangle, Star, ClipboardCheck, Eye, Pencil, ListTodo, Clock, CheckCircle2, Circle, Loader2, Ban, Trash2, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { format, subMonths } from "date-fns";
@@ -96,8 +96,15 @@ export default function ManagerDashboard() {
 
   const burnoutRiskCount = burnoutData?.filter((r: any) => r.dropPercentage > 30).length ?? 0;
 
-  const totalFeedback = teamFeedback?.length ?? 0;
+  const totalTeamSize = teamMembers?.length ?? 0;
+  const submittedCount = teamFeedback?.length ?? 0;
   const reviewedCount = teamFeedback?.filter((f: any) => f.reviewed).length ?? 0;
+
+  const missingSubmissions = useMemo(() => {
+    if (!teamMembers || !teamFeedback) return [];
+    const submittedUserIds = new Set(teamFeedback.map((f: any) => f.userId));
+    return teamMembers.filter((m: any) => !submittedUserIds.has(m.id));
+  }, [teamMembers, teamFeedback]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -178,7 +185,7 @@ export default function ManagerDashboard() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card data-testid="card-avg-satisfaction">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Satisfaction</CardTitle>
@@ -201,19 +208,70 @@ export default function ManagerDashboard() {
           </CardContent>
         </Card>
 
-        <Card data-testid="card-reviews-completed">
+        <Card data-testid="card-submissions">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reviews Completed</CardTitle>
+            <CardTitle className="text-sm font-medium">Submissions</CardTitle>
             <ClipboardCheck className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-submissions-value">
+              {submittedCount} / {totalTeamSize}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {missingSubmissions.length > 0
+                ? `${missingSubmissions.length} not yet submitted`
+                : "All members submitted"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-reviews-completed">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Reviews Done</CardTitle>
+            <Eye className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
             <div className="text-2xl font-bold" data-testid="text-reviews-completed-value">
-              {reviewedCount} / {totalFeedback}
+              {reviewedCount} / {submittedCount}
             </div>
             <p className="text-xs text-muted-foreground">Feedback entries reviewed</p>
           </CardContent>
         </Card>
       </div>
+
+      {missingSubmissions.length > 0 && (
+        <section data-testid="section-missing-submissions">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <UserX className="w-5 h-5 text-orange-500" />
+            Not Yet Submitted — {selectedPeriod}
+            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate ml-1">
+              {missingSubmissions.length}
+            </Badge>
+          </h2>
+          <div className="flex items-center gap-3 flex-wrap">
+            {missingSubmissions.map((m: any) => {
+              const initials = `${(m.firstName?.[0] || "?")}${(m.lastName?.[0] || "")}`;
+              return (
+                <ShadTooltip key={m.id}>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 rounded-md border border-orange-200 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-950/30 px-3 py-2" data-testid={`chip-missing-${m.id}`}>
+                      <Avatar className="w-7 h-7">
+                        <AvatarFallback className="text-xs bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium text-foreground">{m.firstName} {m.lastName}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{m.email} — No feedback submitted for {selectedPeriod}</p>
+                  </TooltipContent>
+                </ShadTooltip>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="text-lg font-semibold mb-4">Team Feedback</h2>
