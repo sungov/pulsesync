@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useTeamFeedback, useBurnoutRadar, useCreateActionItem, useUsersList } from "@/hooks/use-pulse-data";
+import { useTeamFeedback, useBurnoutRadar, useCreateActionItem, useUpdateActionItem, useDeleteActionItem, useActionItemsForUser, useUsersList } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Flame, Plus, AlertTriangle, Star, ClipboardCheck, Eye, Pencil } from "lucide-react";
+import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Flame, Plus, AlertTriangle, Star, ClipboardCheck, Eye, Pencil, ListTodo, Clock, CheckCircle2, Circle, Loader2, Ban, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { format, subMonths } from "date-fns";
+
+const STATUS_CONFIG: Record<string, { icon: typeof Circle; color: string; badgeClass: string }> = {
+  "Pending": { icon: Circle, color: "text-amber-500", badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  "In Progress": { icon: Loader2, color: "text-blue-500", badgeClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  "Blocked": { icon: Ban, color: "text-red-500", badgeClass: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  "Completed": { icon: CheckCircle2, color: "text-emerald-500", badgeClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+};
 
 const periodOptions = Array.from({ length: 12 }, (_, i) => {
   const d = subMonths(new Date(), i);
@@ -37,12 +45,35 @@ export default function ManagerDashboard() {
   const { data: teamMembers } = useUsersList("EMPLOYEE", user?.email || "");
   const { data: teamFeedback, isLoading: isFeedbackLoading } = useTeamFeedback(user?.email || "", selectedPeriod);
   const { data: burnoutData } = useBurnoutRadar();
+  const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email);
   const createActionItem = useCreateActionItem();
+  const updateActionItem = useUpdateActionItem();
+  const deleteActionItem = useDeleteActionItem();
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [taskContent, setTaskContent] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [actionFilter, setActionFilter] = useState("all");
+
+  const filteredActionItems = useMemo(() => {
+    if (!allActionItems) return [];
+    const items = allActionItems.filter((a: any) => a.mgrEmail === user?.email);
+    if (actionFilter === "all") return items;
+    return items.filter((a: any) => a.status === actionFilter);
+  }, [allActionItems, user?.email, actionFilter]);
+
+  const actionCounts = useMemo(() => {
+    if (!allActionItems) return { pending: 0, inProgress: 0, blocked: 0, completed: 0, overdue: 0 };
+    const items = allActionItems.filter((a: any) => a.mgrEmail === user?.email);
+    return {
+      pending: items.filter((a: any) => a.status === "Pending").length,
+      inProgress: items.filter((a: any) => a.status === "In Progress").length,
+      blocked: items.filter((a: any) => a.status === "Blocked").length,
+      completed: items.filter((a: any) => a.status === "Completed").length,
+      overdue: items.filter((a: any) => a.status !== "Completed" && new Date(a.dueDate) < new Date()).length,
+    };
+  }, [allActionItems, user?.email]);
 
   const handleCreateTask = async () => {
     if (!selectedEmployee || !taskContent || !dueDate || !user?.email) return;
@@ -297,6 +328,117 @@ export default function ManagerDashboard() {
               <div className="py-12 text-center" data-testid="text-no-feedback">
                 <p className="text-muted-foreground">No team feedback found for {selectedPeriod}.</p>
               </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <ListTodo className="w-5 h-5 text-primary" />
+            All Action Items
+          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            {actionCounts.overdue > 0 && (
+              <Badge variant="destructive" data-testid="badge-action-overdue-count">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                {actionCounts.overdue} overdue
+              </Badge>
+            )}
+            {actionCounts.blocked > 0 && (
+              <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" data-testid="badge-action-blocked-count">
+                {actionCounts.blocked} blocked
+              </Badge>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {["all", "Pending", "In Progress", "Blocked", "Completed"].map(s => (
+            <Button key={s} variant={actionFilter === s ? "default" : "outline"} size="sm" onClick={() => setActionFilter(s)} data-testid={`button-action-filter-${s.toLowerCase().replace(/\s+/g, "-")}`}>
+              {s === "all" ? "All" : s}
+            </Button>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="p-0">
+            {actionsLoading ? (
+              <div className="space-y-3 p-6">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : filteredActionItems.length === 0 ? (
+              <div className="py-12 text-center" data-testid="text-no-action-items">
+                <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-muted-foreground/20" />
+                <p className="text-muted-foreground">No action items match this filter.</p>
+              </div>
+            ) : (
+              <Table data-testid="table-action-items">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Task</TableHead>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredActionItems.map((item: any) => {
+                    const isOverdue = item.status !== "Completed" && new Date(item.dueDate) < new Date();
+                    const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG["Pending"];
+                    const StatusIcon = cfg.icon;
+
+                    return (
+                      <TableRow key={item.id} data-testid={`row-action-item-${item.id}`} className={item.status === "Completed" ? "opacity-60" : ""}>
+                        <TableCell>
+                          <Badge variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${isOverdue ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" : cfg.badgeClass}`}>
+                            <StatusIcon className={`w-3 h-3 mr-1 ${cfg.color}`} />
+                            {isOverdue ? "Overdue" : item.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[300px]">
+                          <p className={`text-sm ${item.status === "Completed" ? "line-through" : ""}`}>{item.task}</p>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{item.empEmail}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate">
+                            {item.assignedTo === "EMPLOYEE" ? "Employee" : "Manager"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className={`text-sm ${isOverdue ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                            {format(new Date(item.dueDate), "MMM d, yyyy")}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Select value={item.status} onValueChange={(val) => updateActionItem.mutate({ id: item.id, updates: { status: val } })}>
+                              <SelectTrigger className="w-[120px] text-xs" data-testid={`select-action-status-${item.id}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Pending">Pending</SelectItem>
+                                <SelectItem value="In Progress">In Progress</SelectItem>
+                                <SelectItem value="Blocked">Blocked</SelectItem>
+                                <SelectItem value="Completed">Completed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <ShadTooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={() => deleteActionItem.mutate(item.id)} disabled={deleteActionItem.isPending} data-testid={`button-delete-action-${item.id}`}>
+                                  <Trash2 className="w-4 h-4 text-muted-foreground" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete</TooltipContent>
+                            </ShadTooltip>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>

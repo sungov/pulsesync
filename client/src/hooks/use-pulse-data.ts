@@ -86,6 +86,18 @@ export function useActionItems(empEmail?: string, mgrEmail?: string) {
   });
 }
 
+export function useActionItemsForUser(email?: string) {
+  return useQuery({
+    queryKey: [api.actionItems.list.path, "forUser", email],
+    queryFn: async () => {
+      const res = await fetch(`${api.actionItems.list.path}?forUser=${encodeURIComponent(email!)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch action items");
+      return api.actionItems.list.responses[200].parse(await res.json());
+    },
+    enabled: !!email,
+  });
+}
+
 export function useCreateActionItem() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

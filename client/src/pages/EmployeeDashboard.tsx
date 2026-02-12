@@ -1,8 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useFeedbackList, useActionItems } from "@/hooks/use-pulse-data";
+import { useFeedbackList, useActionItems, useCreateActionItem, useUpdateActionItem, useDeleteActionItem } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, subMonths, isAfter, parseISO } from "date-fns";
 import {
@@ -10,21 +14,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
 import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Activity,
-  Briefcase,
-  Smile,
-  Scale,
-  HeartHandshake,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  ListTodo,
-  BarChart3,
-  User,
-  FileText,
+  TrendingUp, TrendingDown, Minus, Activity, Briefcase, Smile, Scale,
+  HeartHandshake, Clock, CheckCircle2, AlertTriangle, ListTodo, BarChart3,
+  User, FileText, Plus, Pencil, Circle, Loader2, Ban,
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -36,6 +28,13 @@ const MOOD_BADGE_COLORS: Record<string, string> = {
   "Neutral": "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300",
   "Challenged": "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   "Burned Out": "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};
+
+const STATUS_CONFIG: Record<string, { icon: typeof Circle; color: string; badgeClass: string }> = {
+  "Pending": { icon: Circle, color: "text-amber-500", badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  "In Progress": { icon: Loader2, color: "text-blue-500", badgeClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  "Blocked": { icon: Ban, color: "text-red-500", badgeClass: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  "Completed": { icon: CheckCircle2, color: "text-emerald-500", badgeClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
 };
 
 function FeedbackRow({ fb }: { fb: Feedback }) {
@@ -146,12 +145,24 @@ export default function EmployeeDashboard() {
   const [periodMonths, setPeriodMonths] = useState("6");
 
   const { data: allFeedback, isLoading: feedbackLoading } = useFeedbackList(user?.id);
-  const { data: actionItems, isLoading: actionsLoading } = useActionItems(user?.email ?? undefined);
+  const { data: actionItemsRaw, isLoading: actionsLoading } = useActionItems(user?.email ?? undefined);
+  const createActionItem = useCreateActionItem();
+  const updateActionItem = useUpdateActionItem();
+
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [taskContent, setTaskContent] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [assignedTo, setAssignedTo] = useState("EMPLOYEE");
+  const [editTask, setEditTask] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const filteredFeedback = useMemo(() => {
     if (!allFeedback) return [];
     if (periodMonths === "all") return [...allFeedback].reverse();
-
     const cutoff = subMonths(new Date(), parseInt(periodMonths));
     return [...allFeedback]
       .filter((f: Feedback) => f.createdAt && isAfter(new Date(f.createdAt), cutoff))
@@ -175,14 +186,64 @@ export default function EmployeeDashboard() {
   const previous = filteredFeedback.length > 1 ? filteredFeedback[filteredFeedback.length - 2] : null;
 
   const relevantActions = useMemo(() => {
-    if (!actionItems || !user?.email) return [];
-    return actionItems.filter((item: any) => item.empEmail === user.email);
-  }, [actionItems, user?.email]);
+    if (!actionItemsRaw || !user?.email) return [];
+    return actionItemsRaw.filter((item: any) => item.empEmail === user.email);
+  }, [actionItemsRaw, user?.email]);
+
+  const displayedActions = useMemo(() => {
+    if (statusFilter === "all") return relevantActions;
+    return relevantActions.filter((a: any) => a.status === statusFilter);
+  }, [relevantActions, statusFilter]);
 
   const pendingActions = relevantActions.filter((a: any) => a.status === "Pending");
+  const inProgressActions = relevantActions.filter((a: any) => a.status === "In Progress");
+  const blockedActions = relevantActions.filter((a: any) => a.status === "Blocked");
   const overdueActions = relevantActions.filter((a: any) => {
-    return a.status === "Pending" && new Date(a.dueDate) < new Date();
+    return a.status !== "Completed" && new Date(a.dueDate) < new Date();
   });
+
+  const managerEmail = (user as any)?.managerEmail;
+
+  const handleCreateTask = async () => {
+    if (!taskContent || !dueDate || !user?.email || !managerEmail) return;
+    await createActionItem.mutateAsync({
+      empEmail: user.email,
+      mgrEmail: managerEmail,
+      task: taskContent,
+      dueDate: new Date(dueDate),
+      status: "Pending",
+      assignedTo,
+    });
+    setTaskDialogOpen(false);
+    setTaskContent("");
+    setDueDate("");
+    setAssignedTo("EMPLOYEE");
+  };
+
+  const handleMarkComplete = (item: any) => {
+    updateActionItem.mutate({
+      id: item.id,
+      updates: { status: "Completed" },
+    });
+  };
+
+  const openEditDialog = (item: any) => {
+    setEditItem(item);
+    setEditTask(item.task);
+    setEditDueDate(format(new Date(item.dueDate), "yyyy-MM-dd"));
+    setEditStatus(item.status);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editItem || !editTask || !editDueDate) return;
+    await updateActionItem.mutateAsync({
+      id: editItem.id,
+      updates: { task: editTask, dueDate: new Date(editDueDate), status: editStatus },
+    });
+    setEditDialogOpen(false);
+    setEditItem(null);
+  };
 
   const isLoading = feedbackLoading || actionsLoading;
 
@@ -237,9 +298,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-primary/10">
                     <Briefcase className="w-4 h-4 text-primary" />
                   </div>
-                  {previous && (
-                    <TrendIndicator current={latest!.satScore} previous={previous.satScore} />
-                  )}
+                  {previous && <TrendIndicator current={latest!.satScore} previous={previous.satScore} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.satScore}/10</p>
                 <p className="text-xs text-muted-foreground mt-1">Work Satisfaction</p>
@@ -252,12 +311,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-amber-500/10">
                     <Smile className="w-4 h-4 text-amber-500" />
                   </div>
-                  {previous && (
-                    <TrendIndicator
-                      current={MOOD_MAP[latest!.moodScore] || 3}
-                      previous={MOOD_MAP[previous.moodScore] || 3}
-                    />
-                  )}
+                  {previous && <TrendIndicator current={MOOD_MAP[latest!.moodScore] || 3} previous={MOOD_MAP[previous.moodScore] || 3} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.moodScore}</p>
                 <p className="text-xs text-muted-foreground mt-1">Overall Mood</p>
@@ -270,9 +324,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-violet-500/10">
                     <Scale className="w-4 h-4 text-violet-500" />
                   </div>
-                  {previous && (
-                    <TrendIndicator current={latest!.workloadLevel} previous={previous.workloadLevel} />
-                  )}
+                  {previous && <TrendIndicator current={latest!.workloadLevel} previous={previous.workloadLevel} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.workloadLevel}/5</p>
                 <p className="text-xs text-muted-foreground mt-1">Workload Level</p>
@@ -285,9 +337,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-rose-500/10">
                     <HeartHandshake className="w-4 h-4 text-rose-500" />
                   </div>
-                  {previous && (
-                    <TrendIndicator current={latest!.workLifeBalance} previous={previous.workLifeBalance} />
-                  )}
+                  {previous && <TrendIndicator current={latest!.workLifeBalance} previous={previous.workLifeBalance} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.workLifeBalance}/5</p>
                 <p className="text-xs text-muted-foreground mt-1">Work-Life Balance</p>
@@ -321,33 +371,10 @@ export default function EmployeeDashboard() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                       <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
-                      />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                       <Legend wrapperStyle={{ fontSize: "12px" }} />
-                      <Area
-                        type="monotone"
-                        dataKey="satisfaction"
-                        stroke="hsl(var(--primary))"
-                        fill="url(#satGrad)"
-                        strokeWidth={2}
-                        name="Satisfaction"
-                        dot={{ r: 3 }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="sentiment"
-                        stroke="hsl(var(--chart-2))"
-                        fill="url(#sentGrad)"
-                        strokeWidth={2}
-                        name="AI Sentiment %"
-                        dot={{ r: 3 }}
-                      />
+                      <Area type="monotone" dataKey="satisfaction" stroke="hsl(var(--primary))" fill="url(#satGrad)" strokeWidth={2} name="Satisfaction" dot={{ r: 3 }} />
+                      <Area type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-2))" fill="url(#sentGrad)" strokeWidth={2} name="AI Sentiment %" dot={{ r: 3 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -369,13 +396,7 @@ export default function EmployeeDashboard() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                       <YAxis domain={[1, 5]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                         formatter={(value: number, name: string) => {
                           if (name === "Mood") {
                             const labels = ["", "Burned Out", "Challenged", "Neutral", "Good", "Great"];
@@ -385,22 +406,8 @@ export default function EmployeeDashboard() {
                         }}
                       />
                       <Legend wrapperStyle={{ fontSize: "12px" }} />
-                      <Line
-                        type="monotone"
-                        dataKey="mood"
-                        stroke="hsl(var(--chart-4))"
-                        strokeWidth={2}
-                        name="Mood"
-                        dot={{ r: 4, fill: "hsl(var(--chart-4))" }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="balance"
-                        stroke="hsl(var(--chart-5))"
-                        strokeWidth={2}
-                        name="Balance"
-                        dot={{ r: 4, fill: "hsl(var(--chart-5))" }}
-                      />
+                      <Line type="monotone" dataKey="mood" stroke="hsl(var(--chart-4))" strokeWidth={2} name="Mood" dot={{ r: 4, fill: "hsl(var(--chart-4))" }} />
+                      <Line type="monotone" dataKey="balance" stroke="hsl(var(--chart-5))" strokeWidth={2} name="Balance" dot={{ r: 4, fill: "hsl(var(--chart-5))" }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -422,24 +429,13 @@ export default function EmployeeDashboard() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
                       <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                         formatter={(value: number) => {
                           const labels = ["", "Under-utilized", "Light", "Balanced", "Heavy", "Overwhelmed"];
                           return [`${labels[value]} (${value}/5)`, "Workload"];
                         }}
                       />
-                      <Bar
-                        dataKey="workload"
-                        fill="hsl(var(--chart-3))"
-                        radius={[4, 4, 0, 0]}
-                        name="Workload"
-                      />
+                      <Bar dataKey="workload" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} name="Workload" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -454,60 +450,98 @@ export default function EmployeeDashboard() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base flex items-center gap-2">
               <ListTodo className="w-4 h-4 text-primary" />
-              Action Items from 1:1 Discussions
+              My Action Items
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {overdueActions.length > 0 && (
                 <Badge variant="destructive" data-testid="badge-overdue-count">
                   <AlertTriangle className="w-3 h-3 mr-1" />
                   {overdueActions.length} overdue
                 </Badge>
               )}
-              {pendingActions.length > 0 && (
-                <Badge variant="secondary" data-testid="badge-pending-count">
-                  {pendingActions.length} pending
-                </Badge>
-              )}
+              <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" disabled={!managerEmail} data-testid="button-create-action-item">
+                    <Plus className="w-4 h-4 mr-1" /> New Item
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Action Item</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Task Description</Label>
+                      <Input value={taskContent} onChange={e => setTaskContent(e.target.value)} placeholder="e.g. Complete certification course" data-testid="input-task-description" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Due Date</Label>
+                      <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} data-testid="input-due-date" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Assign To</Label>
+                      <div className="flex gap-2">
+                        <Button variant={assignedTo === "EMPLOYEE" ? "default" : "outline"} onClick={() => setAssignedTo("EMPLOYEE")} data-testid="button-assign-self">
+                          Myself
+                        </Button>
+                        <Button variant={assignedTo === "MANAGER" ? "default" : "outline"} onClick={() => setAssignedTo("MANAGER")} data-testid="button-assign-manager">
+                          My Manager
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={handleCreateTask} disabled={createActionItem.isPending || !taskContent || !dueDate} data-testid="button-submit-action-item">
+                      {createActionItem.isPending ? "Creating..." : "Create Task"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
-          <CardDescription>Tasks from your manager discussions, for both you and your manager</CardDescription>
+          <CardDescription>Track your tasks from 1:1 discussions and self-assigned items</CardDescription>
         </CardHeader>
         <CardContent>
-          {relevantActions.length === 0 ? (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {["all", "Pending", "In Progress", "Blocked", "Completed"].map(s => (
+              <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)} data-testid={`button-filter-${s.toLowerCase().replace(/\s+/g, "-")}`}>
+                {s === "all" ? "All" : s}
+                {s !== "all" && (
+                  <span className="ml-1 text-xs">({relevantActions.filter((a: any) => a.status === s).length})</span>
+                )}
+              </Button>
+            ))}
+          </div>
+
+          {displayedActions.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 opacity-20" />
-              <p className="text-sm">No action items yet. They'll appear here after your 1:1 meetings.</p>
+              <p className="text-sm">{statusFilter === "all" ? "No action items yet. Create one or they'll appear after your 1:1 meetings." : `No ${statusFilter.toLowerCase()} items.`}</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {relevantActions.map((item: any) => {
-                const isOverdue = item.status === "Pending" && new Date(item.dueDate) < new Date();
+              {displayedActions.map((item: any) => {
+                const isOverdue = item.status !== "Completed" && new Date(item.dueDate) < new Date();
                 const isForEmployee = item.assignedTo === "EMPLOYEE";
+                const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG["Pending"];
+                const StatusIcon = cfg.icon;
+                const isEditable = item.status !== "Completed";
+
                 return (
-                  <div
-                    key={item.id}
-                    className="flex items-start gap-4 p-4 rounded-lg border border-border bg-card"
-                    data-testid={`card-action-item-${item.id}`}
-                  >
-                    <div className="p-2 rounded-lg bg-muted/50 mt-0.5">
-                      {isForEmployee ? (
-                        <User className="w-4 h-4 text-primary" />
-                      ) : (
-                        <User className="w-4 h-4 text-violet-500" />
-                      )}
+                  <div key={item.id} className={`flex items-start gap-4 p-4 rounded-lg border border-border ${item.status === "Completed" ? "opacity-60" : ""}`} data-testid={`card-action-item-${item.id}`}>
+                    <div className={`p-2 rounded-lg bg-muted/50 mt-0.5`}>
+                      <StatusIcon className={`w-4 h-4 ${cfg.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <Badge
-                          variant={item.status === "Completed" ? "outline" : isOverdue ? "destructive" : "default"}
-                        >
-                          {isOverdue ? "Overdue" : item.status}
+                        <Badge variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${isOverdue && item.status !== "Completed" ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" : cfg.badgeClass}`}>
+                          {isOverdue && item.status !== "Completed" ? "Overdue" : item.status}
                         </Badge>
-                        <Badge variant="secondary">
+                        <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate">
                           {isForEmployee ? "For You" : "For Manager"}
                         </Badge>
                       </div>
-                      <p className="font-medium text-sm text-foreground mt-2">{item.task}</p>
+                      <p className={`font-medium text-sm text-foreground mt-2 ${item.status === "Completed" ? "line-through" : ""}`}>{item.task}</p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
@@ -516,6 +550,28 @@ export default function EmployeeDashboard() {
                         <span>Manager: {item.mgrEmail}</span>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1">
+                      {isEditable && (
+                        <>
+                          <ShadTooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => handleMarkComplete(item)} disabled={updateActionItem.isPending} data-testid={`button-complete-${item.id}`}>
+                                <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Mark Complete</TooltipContent>
+                          </ShadTooltip>
+                          <ShadTooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} data-testid={`button-edit-${item.id}`}>
+                                <Pencil className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit</TooltipContent>
+                          </ShadTooltip>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -523,6 +579,43 @@ export default function EmployeeDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Action Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Task Description</Label>
+              <Input value={editTask} onChange={e => setEditTask(e.target.value)} data-testid="input-edit-task" />
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} data-testid="input-edit-due-date" />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={editStatus} onValueChange={setEditStatus}>
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Blocked">Blocked</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleEditSave} disabled={updateActionItem.isPending || !editTask || !editDueDate} data-testid="button-save-edit">
+              {updateActionItem.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card data-testid="card-submissions-history">
         <CardHeader>

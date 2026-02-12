@@ -25,6 +25,7 @@ export interface IStorage {
 
   createActionItem(item: InsertActionItem): Promise<ActionItem>;
   getActionItems(empEmail?: string, mgrEmail?: string): Promise<ActionItem[]>;
+  getActionItemsForUser(email: string): Promise<ActionItem[]>;
   updateActionItem(id: number, updates: UpdateActionItemRequest): Promise<ActionItem>;
   deleteActionItem(id: number): Promise<void>;
   
@@ -132,6 +133,12 @@ export class DatabaseStorage implements IStorage {
       query = query.where(and(...conditions));
     }
     return query.orderBy(desc(actionItems.dueDate));
+  }
+
+  async getActionItemsForUser(email: string): Promise<ActionItem[]> {
+    return db.select().from(actionItems)
+      .where(sql`${actionItems.empEmail} = ${email} OR ${actionItems.mgrEmail} = ${email}`)
+      .orderBy(desc(actionItems.dueDate));
   }
 
   async updateActionItem(id: number, updates: UpdateActionItemRequest): Promise<ActionItem> {

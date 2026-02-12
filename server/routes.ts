@@ -180,7 +180,12 @@ export async function registerRoutes(
     const id = parseInt(req.params.id as string);
     const fb = await storage.getFeedback(id);
     if (!fb) return res.status(404).json({ message: "Not found" });
-    res.json(fb);
+    const fbUser = await storage.getUser(fb.userId);
+    const result = {
+      ...fb,
+      user: fbUser ? { firstName: fbUser.firstName, lastName: fbUser.lastName, deptCode: (fbUser as any).deptCode, email: fbUser.email } : undefined,
+    };
+    res.json(result);
   });
 
   app.post(api.reviews.create.path, isAuthenticated, async (req, res) => {
@@ -205,7 +210,9 @@ export async function registerRoutes(
 
   app.post(api.actionItems.create.path, isAuthenticated, async (req, res) => {
     try {
-      const input = api.actionItems.create.input.parse(req.body);
+      const body = { ...req.body };
+      if (typeof body.dueDate === "string") body.dueDate = new Date(body.dueDate);
+      const input = api.actionItems.create.input.parse(body);
       const item = await storage.createActionItem(input);
       res.status(201).json(item);
     } catch (err) {
@@ -216,13 +223,19 @@ export async function registerRoutes(
   app.get(api.actionItems.list.path, isAuthenticated, async (req, res) => {
     const empEmail = req.query.empEmail as string;
     const mgrEmail = req.query.mgrEmail as string;
+    const forUser = req.query.forUser as string;
+    if (forUser) {
+      const items = await storage.getActionItemsForUser(forUser);
+      return res.json(items);
+    }
     const items = await storage.getActionItems(empEmail, mgrEmail);
     res.json(items);
   });
 
   app.patch(api.actionItems.update.path, isAuthenticated, async (req, res) => {
     const id = parseInt(req.params.id as string);
-    const updates = req.body;
+    const updates = { ...req.body };
+    if (typeof updates.dueDate === "string") updates.dueDate = new Date(updates.dueDate);
     try {
       const updated = await storage.updateActionItem(id, updates);
       res.json(updated);

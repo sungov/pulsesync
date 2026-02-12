@@ -1,14 +1,20 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useReviewByFeedback, useUpsertReview } from "@/hooks/use-pulse-data";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useReviewByFeedback, useUpsertReview, useActionItems, useCreateActionItem, useUpdateActionItem, useDeleteActionItem } from "@/hooks/use-pulse-data";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { ArrowLeft, Save, User, Briefcase, Calendar } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ArrowLeft, Save, User, Briefcase, Calendar, ListTodo, Plus, Pencil, Trash2, CheckCircle2, Clock, Circle, Loader2, Ban, AlertTriangle } from "lucide-react";
+import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { format } from "date-fns";
 import type { Feedback, ManagerReview } from "@shared/schema";
 
 const MOOD_COLORS: Record<string, string> = {
@@ -17,6 +23,13 @@ const MOOD_COLORS: Record<string, string> = {
   "Neutral": "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
   "Challenged": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   "Burned Out": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
+
+const STATUS_CONFIG: Record<string, { icon: typeof Circle; color: string; badgeClass: string }> = {
+  "Pending": { icon: Circle, color: "text-amber-500", badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  "In Progress": { icon: Loader2, color: "text-blue-500", badgeClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  "Blocked": { icon: Ban, color: "text-red-500", badgeClass: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  "Completed": { icon: CheckCircle2, color: "text-emerald-500", badgeClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
 };
 
 interface FieldConfig {
@@ -88,7 +101,7 @@ const SECTIONS: { title: string; fields: FieldConfig[] }[] = [
 ];
 
 function useFeedbackById(id?: number) {
-  return useQuery<Feedback>({
+  return useQuery<Feedback & { user?: { firstName?: string; lastName?: string; deptCode?: string; email?: string } }>({
     queryKey: ["/api/feedback", id],
     queryFn: async () => {
       const res = await fetch(`/api/feedback/${id}`, { credentials: "include" });
@@ -109,8 +122,25 @@ export default function ReviewFeedback() {
   const { data: existingReview, isLoading: reviewLoading } = useReviewByFeedback(feedbackId);
   const upsertReview = useUpsertReview();
 
+  const empEmail = feedbackData?.user?.email;
+  const { data: actionItemsRaw, isLoading: actionsLoading } = useActionItems(empEmail, user?.email);
+  const createActionItem = useCreateActionItem();
+  const updateActionItem = useUpdateActionItem();
+  const deleteActionItem = useDeleteActionItem();
+
   const [comments, setComments] = useState<CommentState>(INITIAL_COMMENTS);
   const [initialized, setInitialized] = useState(false);
+
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskContent, setTaskContent] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [assignedTo, setAssignedTo] = useState("EMPLOYEE");
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [editTask, setEditTask] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editStatus, setEditStatus] = useState("");
 
   useEffect(() => {
     if (existingReview && !initialized) {
@@ -133,6 +163,11 @@ export default function ReviewFeedback() {
     }
   }, [existingReview, initialized]);
 
+  const actionItems = useMemo(() => {
+    if (!actionItemsRaw || !empEmail || !user?.email) return [];
+    return actionItemsRaw.filter((item: any) => item.empEmail === empEmail && item.mgrEmail === user.email);
+  }, [actionItemsRaw, empEmail, user?.email]);
+
   const updateComment = (key: keyof CommentState, value: string) => {
     setComments((prev) => ({ ...prev, [key]: value }));
   };
@@ -144,6 +179,40 @@ export default function ReviewFeedback() {
       mgrEmail: user.email,
       ...comments,
     });
+  };
+
+  const handleCreateTask = async () => {
+    if (!taskContent || !dueDate || !user?.email || !empEmail) return;
+    await createActionItem.mutateAsync({
+      empEmail,
+      mgrEmail: user.email,
+      task: taskContent,
+      dueDate: new Date(dueDate),
+      status: "Pending",
+      assignedTo,
+    });
+    setTaskDialogOpen(false);
+    setTaskContent("");
+    setDueDate("");
+    setAssignedTo("EMPLOYEE");
+  };
+
+  const openEditDialog = (item: any) => {
+    setEditItem(item);
+    setEditTask(item.task);
+    setEditDueDate(format(new Date(item.dueDate), "yyyy-MM-dd"));
+    setEditStatus(item.status);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editItem || !editTask || !editDueDate) return;
+    await updateActionItem.mutateAsync({
+      id: editItem.id,
+      updates: { task: editTask, dueDate: new Date(editDueDate), status: editStatus },
+    });
+    setEditDialogOpen(false);
+    setEditItem(null);
   };
 
   const isLoading = feedbackLoading || reviewLoading;
@@ -181,7 +250,7 @@ export default function ReviewFeedback() {
     );
   }
 
-  const feedback = feedbackData as Feedback & { user?: { firstName?: string; lastName?: string; deptCode?: string } };
+  const feedback = feedbackData;
   const employeeName = feedback.user
     ? `${feedback.user.firstName || ""} ${feedback.user.lastName || ""}`.trim()
     : `Employee ${feedback.userId}`;
@@ -263,6 +332,167 @@ export default function ReviewFeedback() {
           </div>
         ))}
       </div>
+
+      <Card data-testid="card-review-action-items">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ListTodo className="w-4 h-4 text-primary" />
+              Action Items with {employeeName}
+            </CardTitle>
+            <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-action-item">
+                  <Plus className="w-4 h-4 mr-1" /> Add Action Item
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Action Item for {employeeName}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Task Description</Label>
+                    <Input value={taskContent} onChange={e => setTaskContent(e.target.value)} placeholder="e.g. Complete compliance training" data-testid="input-task-description" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Due Date</Label>
+                    <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} data-testid="input-due-date" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Assign To</Label>
+                    <div className="flex gap-2">
+                      <Button variant={assignedTo === "EMPLOYEE" ? "default" : "outline"} onClick={() => setAssignedTo("EMPLOYEE")} data-testid="button-assign-employee">
+                        {employeeName}
+                      </Button>
+                      <Button variant={assignedTo === "MANAGER" ? "default" : "outline"} onClick={() => setAssignedTo("MANAGER")} data-testid="button-assign-manager">
+                        Manager (Me)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleCreateTask} disabled={createActionItem.isPending || !taskContent || !dueDate} data-testid="button-submit-action-item">
+                    {createActionItem.isPending ? "Creating..." : "Create Task"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <CardDescription>Action items between you and {employeeName}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {actionsLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+            </div>
+          ) : actionItems.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <CheckCircle2 className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm">No action items yet. Add one to track follow-ups.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {actionItems.map((item: any) => {
+                const isOverdue = item.status !== "Completed" && new Date(item.dueDate) < new Date();
+                const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG["Pending"];
+                const StatusIcon = cfg.icon;
+
+                return (
+                  <div key={item.id} className={`flex items-start gap-4 p-4 rounded-lg border border-border ${item.status === "Completed" ? "opacity-60" : ""}`} data-testid={`card-action-item-${item.id}`}>
+                    <div className="p-2 rounded-lg bg-muted/50 mt-0.5">
+                      <StatusIcon className={`w-4 h-4 ${cfg.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <Badge variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${isOverdue ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" : cfg.badgeClass}`}>
+                          {isOverdue ? "Overdue" : item.status}
+                        </Badge>
+                        <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate">
+                          {item.assignedTo === "EMPLOYEE" ? "Employee" : "Manager"}
+                        </Badge>
+                      </div>
+                      <p className={`font-medium text-sm text-foreground mt-2 ${item.status === "Completed" ? "line-through" : ""}`}>{item.task}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          Due {format(new Date(item.dueDate), "MMM d, yyyy")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Select value={item.status} onValueChange={(val) => updateActionItem.mutate({ id: item.id, updates: { status: val } })}>
+                        <SelectTrigger className="w-[130px] text-xs" data-testid={`select-status-${item.id}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Pending">Pending</SelectItem>
+                          <SelectItem value="In Progress">In Progress</SelectItem>
+                          <SelectItem value="Blocked">Blocked</SelectItem>
+                          <SelectItem value="Completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <ShadTooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} data-testid={`button-edit-action-${item.id}`}>
+                            <Pencil className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit</TooltipContent>
+                      </ShadTooltip>
+                      <ShadTooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => deleteActionItem.mutate(item.id)} disabled={deleteActionItem.isPending} data-testid={`button-delete-action-${item.id}`}>
+                            <Trash2 className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete</TooltipContent>
+                      </ShadTooltip>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Action Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Task Description</Label>
+              <Input value={editTask} onChange={e => setEditTask(e.target.value)} data-testid="input-edit-task" />
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} data-testid="input-edit-due-date" />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={editStatus} onValueChange={setEditStatus}>
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Blocked">Blocked</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleEditSave} disabled={updateActionItem.isPending || !editTask || !editDueDate} data-testid="button-save-edit">
+              {updateActionItem.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex justify-end pb-8">
         <Button onClick={handleSave} disabled={upsertReview.isPending} data-testid="button-save-review-bottom">
