@@ -42,7 +42,7 @@ export default function ManagerDashboard() {
   const { toast } = useToast();
   const [selectedPeriod, setSelectedPeriod] = useState(periodOptions[0]);
 
-  const { data: teamMembers } = useUsersList("EMPLOYEE", user?.email || "");
+  const { data: teamMembers } = useUsersList(undefined, user?.email || "");
   const { data: teamFeedback, isLoading: isFeedbackLoading } = useTeamFeedback(user?.email || "", selectedPeriod);
   const { data: burnoutData } = useBurnoutRadar(user?.email || undefined);
   const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email ?? undefined);
