@@ -88,7 +88,11 @@ const COMPARE_LABELS: Record<CompareMode, string> = {
   year: "12 Month Trend",
 };
 
-const LINE_COLORS = ["#4f46e5", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
+const LINE_COLORS = [
+  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--primary))",
+  "hsl(var(--destructive))", "hsl(var(--muted-foreground))"
+];
 
 function ScatterTooltipContent({ active, payload }: any) {
   if (!active || !payload?.length) return null;
@@ -197,9 +201,9 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
           <CardContent className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" dataKey="sentiment" name="Sentiment" domain={[0, 10]} stroke="#6b7280" fontSize={12} tickLine={false} label={{ value: "Sentiment (0-10)", position: "bottom", offset: 0, fontSize: 11, fill: "#9ca3af" }} />
-                <YAxis type="number" dataKey="satisfaction" name="Satisfaction" domain={[0, 10]} stroke="#6b7280" fontSize={12} tickLine={false} label={{ value: "Satisfaction (0-10)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: "#9ca3af" }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" dataKey="sentiment" name="Sentiment" domain={[0, 10]} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} label={{ value: "Sentiment (0-10)", position: "bottom", offset: 0, fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="number" dataKey="satisfaction" name="Satisfaction" domain={[0, 10]} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} label={{ value: "Satisfaction (0-10)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                 <ZAxis range={[80, 120]} />
                 <Tooltip content={<ScatterTooltipContent />} />
                 <Scatter data={scatterData} isAnimationActive={false}>
@@ -638,9 +642,9 @@ export default function ExecutiveDashboard() {
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={deptHistoryLines.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey="period" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
                         <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                         <Legend />
                         {deptHistoryLines.departments.map((dept, i) => (
@@ -674,11 +678,11 @@ export default function ExecutiveDashboard() {
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                         <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Bar dataKey="satisfaction" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Satisfaction" />
+                        <Bar dataKey="satisfaction" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Satisfaction" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -760,9 +764,9 @@ export default function ExecutiveDashboard() {
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={projHistoryLines.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                          <XAxis dataKey="period" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
-                          <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                          <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
                           <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                           <Legend />
                           {projHistoryLines.projects.map((proj, i) => (
@@ -791,11 +795,11 @@ export default function ExecutiveDashboard() {
                   <CardContent className="h-[350px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={projectChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                         <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Bar dataKey="satisfaction" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Satisfaction" />
+                        <Bar dataKey="satisfaction" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} name="Satisfaction" />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
