@@ -32,7 +32,7 @@ export function Sidebar() {
       label: "Submit Feedback",
       href: "/submit-feedback",
       icon: ListTodo,
-      roles: ["EMPLOYEE"],
+      roles: ["EMPLOYEE", "MANAGER"],
     },
     {
       label: "Team Radar",
