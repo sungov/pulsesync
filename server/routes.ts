@@ -315,7 +315,8 @@ export async function registerRoutes(
     } else {
       usersList = await storage.getAllUsers();
     }
-    const safe = usersList.map(u => {
+    const filtered = usersList.filter(u => !u.isAdmin);
+    const safe = filtered.map(u => {
       const { password, ...rest } = u;
       return rest;
     });
@@ -341,6 +342,7 @@ export async function registerRoutes(
     } else {
       targetUsers = await storage.getAllUsers();
     }
+    targetUsers = targetUsers.filter(u => !u.isAdmin);
     const results = [];
     for (const user of targetUsers) {
       const feedbacks = await storage.getFeedbackByUser(user.id);
