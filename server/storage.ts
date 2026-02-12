@@ -81,6 +81,9 @@ export class DatabaseStorage implements IStorage {
     const user = await this.getUser(id);
     if (!user) return;
 
+    await db.delete(kudos).where(or(eq(kudos.giverUserId, id), eq(kudos.receiverUserId, id)));
+    await db.delete(managerFeedback).where(eq(managerFeedback.submitterUserId, id));
+
     const userFeedback = await db.select({ id: feedback.id }).from(feedback).where(eq(feedback.userId, id));
     for (const fb of userFeedback) {
       await db.delete(managerReviews).where(eq(managerReviews.feedbackId, fb.id));
