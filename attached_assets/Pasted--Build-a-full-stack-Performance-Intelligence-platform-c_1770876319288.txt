@@ -1,0 +1,42 @@
+"Build a full-stack Performance Intelligence platform called 'Pulse-Sync AI'. Use FastAPI for the backend, SQLAlchemy for the database layer with SQLite, and Tailwind CSS for a high-end, executive-style UI."
+
+1. Database & Models (SQLAlchemy + SQLite)
+
+"Create a file database.py to handle the engine and session. In models.py, define the following tables using SQLAlchemy:"
+
+    User: id, email (unique), full_name, role (EMPLOYEE, MANAGER, SENIOR_MGMT), dept_code, manager_email.
+
+    Feedback: id, user_id, submission_period (e.g., 'Feb-2026'), sat_score (int), mood_score (int), accomplishments (text), blockers (text), ai_sentiment (float), ai_summary (text), timestamp.
+
+    ManagerReview: feedback_id (FK), mgr_email, mgr_notes (text), last_edited.
+
+    ActionItem: id, emp_email, mgr_email, task (text), due_date (date), status (Pending/Completed).
+
+2. Core Features to Build
+
+    AI Sentiment Analysis: When an employee submits feedback, use the OpenAI API to analyze the text. Return a sentiment score (0 to 1) and a short summary. Store these in the Feedback table.
+
+    Accountability Dashboard: * Managers see a list of their team. They can conduct 1-on-1 reviews and add Action Items with due dates.
+
+        Highlight tasks in Red if they are Pending and the due_date is in the past.
+
+    Executive Hub (Senior Mgmt): * Show department-wide satisfaction averages.
+
+        Manager Audit Table: List every manager, their total active tasks, and their overdue count.
+
+        The Nudge: A button to send a simulated SMTP email to a manager if they have overdue tasks.
+
+3. The "Killer Feature" (Pre-Emptive Burnout Radar)
+
+"Implement a logic that compares an employee's current ai_sentiment score to their previous month. If the score drops by more than 30%, display a 'High Burnout Risk' badge on the Manager's dashboard next to that employee."
+4. UI/UX Style Guide
+
+"Use a 'Premium Enterprise' aesthetic:"
+
+    Layout: Sidebar navigation with a sticky top header.
+
+    Components: Use Tailwind cards with soft shadows, rounded-3xl corners, and glassmorphism (backdrop-blur) for modals.
+
+    State Management: Show a global loading spinner with the text 'Syncing with Local DB...' during all submissions.
+
+    Charts: Use Chart.js to show a line graph of the employee's satisfaction over time on their progress page.
