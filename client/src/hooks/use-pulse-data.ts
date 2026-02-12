@@ -387,6 +387,20 @@ export function useBlockerThemes(period?: string, groupBy: "dept" | "project" = 
   });
 }
 
+// === ALL EMPLOYEES PERFORMANCE ===
+
+export function useAllEmployeePerformance(search?: string) {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/all-employees", search],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/all-employees${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch employee data");
+      return res.json();
+    },
+  });
+}
+
 // === USERS HOOKS ===
 
 export function useUsersList(role?: string, managerEmail?: string) {

@@ -11,7 +11,8 @@ import {
   Building2,
   FolderKanban,
   UserCheck,
-  Flame
+  Flame,
+  Contact
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,12 @@ export function Sidebar() {
       label: "Manager Insights",
       href: "/managers",
       icon: UserCheck,
+      roles: ["SENIOR_MGMT"],
+    },
+    {
+      label: "Employees",
+      href: "/employees",
+      icon: Contact,
       roles: ["SENIOR_MGMT"],
     },
     {

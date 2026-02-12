@@ -86,6 +86,7 @@ The app has four user roles: EMPLOYEE, MANAGER, SENIOR_MGMT, plus an `isAdmin` f
 | `/departments` | Department Analysis (dept cards, satisfaction charts, employee drill-down) | SENIOR_MGMT |
 | `/projects` | Project Analysis (project cards, satisfaction charts, employee drill-down) | SENIOR_MGMT |
 | `/managers` | Manager Insights (manager performance table + anonymous employee feedback) | SENIOR_MGMT |
+| `/employees` | Employee Directory (searchable employee KPIs, performance overview, drill-down) | SENIOR_MGMT |
 | `/burnout-alerts` | Burnout Alerts (employees with significant sentiment drops) | SENIOR_MGMT |
 | `/review/:feedbackId` | Manager 1-on-1 Review (per-field commenting) | MANAGER |
 | `/employee-progress/:userId` | Employee Progress Deep-Dive | MANAGER, SENIOR_MGMT |

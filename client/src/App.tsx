@@ -10,6 +10,7 @@ import DepartmentAnalysis from "@/pages/DepartmentAnalysis";
 import ProjectAnalysis from "@/pages/ProjectAnalysis";
 import ManagerAnalysis from "@/pages/ManagerAnalysis";
 import BurnoutAlerts from "@/pages/BurnoutAlerts";
+import EmployeeAnalysis from "@/pages/EmployeeAnalysis";
 import EmployeeFeedback from "@/pages/EmployeeFeedback";
 import AdminPanel from "@/pages/AdminPanel";
 import ReviewFeedback from "@/pages/ReviewFeedback";
@@ -52,6 +53,9 @@ function Router() {
       </Route>
       <Route path="/burnout-alerts">
          <AuthenticatedLayout><BurnoutAlerts /></AuthenticatedLayout>
+      </Route>
+      <Route path="/employees">
+         <AuthenticatedLayout><EmployeeAnalysis /></AuthenticatedLayout>
       </Route>
       <Route path="/admin">
          <AuthenticatedLayout><AdminPanel /></AuthenticatedLayout>

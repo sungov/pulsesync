@@ -667,6 +667,33 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  app.get("/api/analytics/all-employees", isAuthenticated, async (req, res) => {
+    const search = req.query.search as string | undefined;
+    const data = await storage.getAllEmployeePerformanceSummary(search);
+    const safeData = data.map((d: any) => ({
+      id: d.id,
+      firstName: d.first_name,
+      lastName: d.last_name,
+      email: d.email,
+      role: d.role,
+      deptCode: d.dept_code,
+      projectCode: d.project_code,
+      managerEmail: d.manager_email,
+      avgSentiment: Number(d.avg_sentiment) || 0,
+      latestSentiment: Number(d.latest_sentiment) || 0,
+      totalFeedback: Number(d.total_feedback) || 0,
+      avgSatScore: Number(d.avg_sat_score) || 0,
+      latestSatScore: d.latest_sat_score != null ? Number(d.latest_sat_score) : null,
+      latestMood: d.latest_mood || null,
+      latestPeriod: d.latest_period || null,
+      avgWorkload: Number(d.avg_workload) || 0,
+      avgWlb: Number(d.avg_wlb) || 0,
+      pendingActions: Number(d.pending_actions) || 0,
+      totalActions: Number(d.total_actions) || 0,
+    }));
+    res.json(safeData);
+  });
+
   app.get("/api/analytics/employee-performance", isAuthenticated, async (req, res) => {
     const dept = req.query.dept as string | undefined;
     const project = req.query.project as string | undefined;

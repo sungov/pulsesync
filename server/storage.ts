@@ -39,6 +39,7 @@ export interface IStorage {
   getProjectAnalytics(period?: string): Promise<any[]>;
   getProjectAnalyticsForPeriods(periods: string[]): Promise<any[]>;
   getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]>;
+  getAllEmployeePerformanceSummary(search?: string): Promise<any[]>;
 
   createKudos(data: InsertKudos): Promise<Kudos>;
   getRecentKudos(limit?: number, startDate?: Date, endDate?: Date): Promise<any[]>;
@@ -331,6 +332,60 @@ export class DatabaseStorage implements IStorage {
       ${periodClause}
       GROUP BY u.project_code
       ORDER BY avg_sat_score ASC
+    `);
+    return result.rows;
+  }
+
+  async getAllEmployeePerformanceSummary(search?: string): Promise<any[]> {
+    const searchFilter = search 
+      ? sql`AND (LOWER(u.first_name) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.last_name) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.email) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.dept_code) LIKE ${`%${search.toLowerCase()}%`} OR LOWER(u.project_code) LIKE ${`%${search.toLowerCase()}%`})`
+      : sql``;
+    const result = await db.execute(sql`
+      SELECT 
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.role,
+        u.dept_code,
+        u.project_code,
+        u.manager_email,
+        COALESCE(perf.avg_sentiment, 0) as avg_sentiment,
+        COALESCE(perf.latest_sentiment, 0) as latest_sentiment,
+        COALESCE(perf.total_feedback, 0) as total_feedback,
+        COALESCE(perf.avg_sat_score, 0) as avg_sat_score,
+        perf.latest_sat_score,
+        perf.latest_mood,
+        perf.latest_period,
+        COALESCE(perf.avg_workload, 0) as avg_workload,
+        COALESCE(perf.avg_wlb, 0) as avg_wlb,
+        COALESCE(act.pending_actions, 0) as pending_actions,
+        COALESCE(act.total_actions, 0) as total_actions
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT 
+          AVG(f.ai_sentiment) as avg_sentiment,
+          AVG(f.sat_score) as avg_sat_score,
+          AVG(f.workload_level) as avg_workload,
+          AVG(f.work_life_balance) as avg_wlb,
+          COUNT(f.id) as total_feedback,
+          (SELECT f2.ai_sentiment FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_sentiment,
+          (SELECT f2.sat_score FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_sat_score,
+          (SELECT f2.mood_score FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_mood,
+          (SELECT f2.submission_period FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_period
+        FROM feedback f
+        WHERE f.user_id = u.id
+      ) perf ON true
+      LEFT JOIN LATERAL (
+        SELECT 
+          COUNT(*) FILTER (WHERE a.status = 'Pending') as pending_actions,
+          COUNT(*) as total_actions
+        FROM action_items a
+        WHERE a.emp_email = u.email
+      ) act ON true
+      WHERE u.is_admin = false AND u.role IN ('EMPLOYEE', 'MANAGER')
+      ${searchFilter}
+      ORDER BY COALESCE(perf.latest_sentiment, 0) ASC
     `);
     return result.rows;
   }
