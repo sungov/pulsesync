@@ -308,8 +308,8 @@ export default function ManagerDashboard() {
                       ?.split(" ")
                       .map((n: string) => n[0])
                       .join("") || "?";
-                    const sentimentScaled = fb.aiSentiment != null ? parseFloat((fb.aiSentiment * 10).toFixed(1)) : null;
-                    const sentimentPct = fb.aiSentiment != null ? Math.round(fb.aiSentiment * 100) : null;
+                    const sentimentScaled = fb.aiSentiment != null ? parseFloat(fb.aiSentiment.toFixed(1)) : null;
+                    const sentimentPct = fb.aiSentiment != null ? Math.round(fb.aiSentiment * 10) : null;
                     const moodClasses = moodColorMap[fb.moodScore] || moodColorMap["Neutral"];
 
                     return (
@@ -533,11 +533,11 @@ export default function ManagerDashboard() {
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   <div className="bg-muted/50 p-3 rounded-md text-center">
                     <p className="text-xs text-muted-foreground mb-1">Current Sentiment</p>
-                    <p className="text-2xl font-bold">{risk.currentSentiment != null ? (risk.currentSentiment * 10).toFixed(1) : '—'}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
+                    <p className="text-2xl font-bold">{risk.currentSentiment != null ? risk.currentSentiment.toFixed(1) : '—'}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
                   </div>
                   <div className="bg-muted/50 p-3 rounded-md text-center">
                     <p className="text-xs text-muted-foreground mb-1">Previous</p>
-                    <p className="text-2xl font-bold text-muted-foreground">{risk.previousSentiment != null ? (risk.previousSentiment * 10).toFixed(1) : '—'}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
+                    <p className="text-2xl font-bold text-muted-foreground">{risk.previousSentiment != null ? risk.previousSentiment.toFixed(1) : '—'}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
                   </div>
                 </div>
               </CardContent>

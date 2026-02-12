@@ -14,7 +14,7 @@ import { format, subMonths } from "date-fns";
 import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame, TrendingUp, TrendingDown, Award, ArrowUpDown } from "lucide-react";
 
 function scaleSentiment(raw: number): number {
-  return raw * 10;
+  return raw;
 }
 import { useToast } from "@/hooks/use-toast";
 

@@ -106,7 +106,7 @@ export default function ManagerOverview() {
       moodLabel: f.moodScore,
       workload: f.workloadLevel,
       balance: f.workLifeBalance,
-      sentiment: f.aiSentiment ? parseFloat((f.aiSentiment * 10).toFixed(1)) : null,
+      sentiment: f.aiSentiment ? parseFloat(f.aiSentiment.toFixed(1)) : null,
     }));
   }, [filteredMyFeedback]);
 
