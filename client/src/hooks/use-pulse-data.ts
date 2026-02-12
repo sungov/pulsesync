@@ -373,6 +373,20 @@ export function useTopBlockers(period?: string, groupBy: "dept" | "project" = "d
   });
 }
 
+export function useBlockerThemes(period?: string, groupBy: "dept" | "project" = "dept") {
+  const qs = period ? `?period=${period}&groupBy=${groupBy}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/blocker-themes", period, groupBy],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/blocker-themes${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch blocker themes");
+      return res.json();
+    },
+    enabled: !!period,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 // === USERS HOOKS ===
 
 export function useUsersList(role?: string, managerEmail?: string) {

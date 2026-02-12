@@ -817,6 +817,72 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  const blockerThemeCache = new Map<string, { data: any; timestamp: number }>();
+  const THEME_CACHE_TTL = 10 * 60 * 1000;
+
+  app.get("/api/analytics/blocker-themes", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    const groupBy = (req.query.groupBy as string) === "project" ? "project" as const : "dept" as const;
+    if (!period) {
+      return res.status(400).json({ message: "period is required" });
+    }
+
+    const cacheKey = `${period}:${groupBy}`;
+    const cached = blockerThemeCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < THEME_CACHE_TTL) {
+      return res.json(cached.data);
+    }
+
+    const data = await storage.getTopBlockers(period, groupBy);
+    const grouped: Record<string, string[]> = {};
+    for (const row of data) {
+      const group = (row as any).dept_code || (row as any).project_code || "General";
+      if (!grouped[group]) grouped[group] = [];
+      grouped[group].push((row as any).blockers);
+    }
+
+    const themes: Record<string, { themes: { title: string; description: string; severity: string; count: number }[] }> = {};
+
+    const analyzeGroup = async (group: string, blockerTexts: string[]) => {
+      if (blockerTexts.length === 0) {
+        return { themes: [] };
+      }
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are an HR analytics assistant. Analyze employee-reported blockers and identify the top recurring themes. Return a JSON object with a "themes" array, max 5 items. Each theme: {"title": "short theme name", "description": "1-2 sentence summary", "severity": "high"|"medium"|"low", "count": number of blockers fitting this theme}.`
+            },
+            {
+              role: "user",
+              content: `Analyze these ${blockerTexts.length} employee-reported blockers for ${groupBy === "project" ? "project" : "department"} "${group}" and identify top recurring themes:\n\n${blockerTexts.map((b, i) => `${i + 1}. ${b}`).join("\n")}`
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 600,
+          response_format: { type: "json_object" },
+        });
+
+        const content = response.choices[0]?.message?.content?.trim() || '{"themes":[]}';
+        const parsed = JSON.parse(content);
+        const arr = Array.isArray(parsed) ? parsed : (parsed.themes || []);
+        return { themes: arr };
+      } catch (err) {
+        console.error(`AI blocker analysis failed for ${group}:`, err);
+        return { themes: [{ title: "Analysis unavailable", description: "Could not analyze blockers at this time.", severity: "medium", count: blockerTexts.length }] };
+      }
+    };
+
+    const entries = Object.entries(grouped);
+    const results = await Promise.all(entries.map(([group, texts]) => analyzeGroup(group, texts)));
+    entries.forEach(([group], idx) => { themes[group] = results[idx]; });
+
+    blockerThemeCache.set(cacheKey, { data: themes, timestamp: Date.now() });
+    res.json(themes);
+  });
+
   // === MANAGER FEEDBACK (Anonymous) ROUTES ===
 
   const createManagerFeedbackSchema = z.object({

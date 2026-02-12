@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { useProjectTrends, useUsersList, useEmployeePerformance, useProjectHistory, useSentimentDistribution, useTopBlockers } from "@/hooks/use-pulse-data";
+import { useProjectTrends, useUsersList, useEmployeePerformance, useProjectHistory, useSentimentDistribution, useTopBlockers, useBlockerThemes } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend, LineChart, Line } from "recharts";
 import { format, subMonths } from "date-fns";
-import { Users, FolderKanban, ArrowLeft, AlertTriangle, Eye, TrendingUp, TrendingDown, Award, ArrowUpDown, ShieldAlert } from "lucide-react";
+import { Users, FolderKanban, ArrowLeft, AlertTriangle, Eye, TrendingUp, TrendingDown, Award, ArrowUpDown, ShieldAlert, ChevronDown, ChevronUp, Sparkles, Loader2 } from "lucide-react";
 
 function scaleSentiment(raw: number): number {
   return raw;
@@ -307,6 +307,8 @@ export default function ProjectAnalysis() {
   const { data: projHistoryRaw, isLoading: projHistLoading } = useProjectHistory(period, compareMode === "year");
   const { data: sentimentDist, isLoading: sentDistLoading } = useSentimentDistribution(period, "project");
   const { data: topBlockers, isLoading: blockersLoading } = useTopBlockers(period, "project");
+  const { data: blockerThemes, isLoading: themesLoading } = useBlockerThemes(period, "project");
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
   const allUsersArr = (usersData as any[]) || [];
   const showTrends = compareMode === "month" || compareMode === "quarter";
@@ -523,36 +525,84 @@ export default function ProjectAnalysis() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-orange-500" />
-                  Top Blockers & Common Themes
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  AI-Analyzed Blocker Themes
                 </CardTitle>
-                <CardDescription>Most impactful blockers reported by employees ({period}) -- sorted by lowest sentiment first</CardDescription>
+                <CardDescription>AI-identified recurring themes from employee-reported blockers ({period})</CardDescription>
               </CardHeader>
               <CardContent>
-                {blockersLoading ? (
-                  <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
-                ) : !topBlockers || topBlockers.length === 0 ? (
+                {themesLoading ? (
+                  <div className="flex items-center gap-3 justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <span className="text-sm text-muted-foreground">Analyzing blockers with AI...</span>
+                  </div>
+                ) : !blockerThemes || Object.keys(blockerThemes).length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">No blockers reported this period</div>
                 ) : (
                   <div className="space-y-6">
-                    {Object.entries(blockersByProject).map(([proj, items]) => (
+                    {Object.entries(blockerThemes).map(([proj, data]: [string, any]) => (
                       <div key={proj}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <FolderKanban className="w-4 h-4 text-muted-foreground" />
-                          <h3 className="font-semibold text-sm text-foreground">{proj}</h3>
-                          <Badge variant="secondary" className="text-xs">{items.length} blocker{items.length !== 1 ? "s" : ""}</Badge>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2">
+                            <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                            <h3 className="font-semibold text-sm text-foreground">{proj}</h3>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExpandedProject(expandedProject === proj ? null : proj)}
+                            data-testid={`button-expand-blockers-${proj}`}
+                          >
+                            {expandedProject === proj ? (
+                              <><ChevronUp className="w-3.5 h-3.5 mr-1" /> Hide details</>
+                            ) : (
+                              <><ChevronDown className="w-3.5 h-3.5 mr-1" /> View all blockers</>
+                            )}
+                          </Button>
                         </div>
-                        <ul className="space-y-1.5 pl-6">
-                          {items.slice(0, 5).map((item, idx) => (
-                            <li key={idx} className="flex items-start gap-2 py-1.5 border-b border-border/50 last:border-0">
-                              <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${item.sentiment < 3 ? "text-destructive" : item.sentiment < 5 ? "text-orange-500" : "text-muted-foreground"}`} />
-                              <p className="text-sm text-muted-foreground leading-relaxed">{item.blockers}</p>
-                            </li>
-                          ))}
-                          {items.length > 5 && (
-                            <li className="text-xs text-muted-foreground pl-5">+{items.length - 5} more blockers in {proj}</li>
-                          )}
-                        </ul>
+                        {data.themes && data.themes.length > 0 ? (
+                          <div className="space-y-2 pl-6">
+                            {data.themes.map((theme: any, idx: number) => (
+                              <div key={idx} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
+                                <Badge
+                                  variant={theme.severity === "high" ? "destructive" : theme.severity === "low" ? "secondary" : "default"}
+                                  className="text-xs shrink-0 mt-0.5"
+                                >
+                                  {theme.severity}
+                                </Badge>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-foreground">{theme.title}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{theme.description}</p>
+                                </div>
+                                <span className="text-xs text-muted-foreground shrink-0 mt-0.5">{theme.count} report{theme.count !== 1 ? "s" : ""}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground pl-6">No significant themes identified.</p>
+                        )}
+
+                        {expandedProject === proj && (
+                          <div className="mt-4 pl-6 border-t border-border pt-3">
+                            {blockersLoading ? (
+                              <div className="flex items-center gap-2 py-4"><Loader2 className="w-4 h-4 animate-spin" /><span className="text-xs text-muted-foreground">Loading blockers...</span></div>
+                            ) : !blockersByProject[proj] || blockersByProject[proj].length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-2">No individual blockers available.</p>
+                            ) : (
+                            <>
+                            <p className="text-xs font-medium text-muted-foreground mb-2">All individual blockers ({blockersByProject[proj].length})</p>
+                            <ul className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                              {blockersByProject[proj].map((item, idx) => (
+                                <li key={idx} className="flex items-start gap-2 py-1">
+                                  <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${item.sentiment < 3 ? "text-destructive" : item.sentiment < 5 ? "text-orange-500" : "text-muted-foreground"}`} />
+                                  <p className="text-xs text-muted-foreground leading-relaxed">{item.blockers}</p>
+                                </li>
+                              ))}
+                            </ul>
+                            </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

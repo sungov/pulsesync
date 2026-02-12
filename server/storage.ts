@@ -526,6 +526,11 @@ export class DatabaseStorage implements IStorage {
         AND f.blockers IS NOT NULL 
         AND f.blockers != ''
         AND LOWER(TRIM(f.blockers)) NOT IN ('none', 'n/a', 'na', 'no', 'nothing', '-', 'no blockers', 'no blockers this period', 'nil')
+        AND LOWER(TRIM(f.blockers)) NOT LIKE '%no significant%'
+        AND LOWER(TRIM(f.blockers)) NOT LIKE '%no major%'
+        AND LOWER(TRIM(f.blockers)) NOT LIKE '%no blockers%'
+        AND LOWER(TRIM(f.blockers)) NOT LIKE '%no issues%'
+        AND LOWER(TRIM(f.blockers)) NOT LIKE '%nothing significant%'
         ${projectFilter}
       ORDER BY f.ai_sentiment ASC, f.sat_score ASC
     `);
