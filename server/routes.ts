@@ -188,6 +188,85 @@ export async function registerRoutes(
     res.json({ exists: false, feedbackId: null, reviewed: false });
   });
 
+  app.put("/api/feedback/:id", isAuthenticated, async (req, res) => {
+    try {
+      const feedbackId = parseInt(req.params.id);
+      const userId = (req.session as any)?.userId;
+      const existing = await storage.getFeedback(feedbackId);
+      if (!existing) {
+        return res.status(404).json({ message: "Feedback not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ message: "You can only edit your own feedback." });
+      }
+      const review = await storage.getReviewByFeedbackId(feedbackId);
+      if (review) {
+        return res.status(403).json({ message: "This feedback has been reviewed and can no longer be modified." });
+      }
+
+      const input = api.feedback.create.input.parse(req.body);
+
+      const textToAnalyze = `
+        Accomplishments: ${input.accomplishments}
+        Disappointments: ${input.disappointments}
+        Blockers: ${input.blockers}
+        Mentoring: ${input.mentoringCulture}
+        Support: ${input.supportNeeds}
+        Goals: ${input.goalProgress}
+        Suggestions: ${input.processSuggestions}
+      `;
+
+      let aiSentiment = existing.aiSentiment ?? 0.5;
+      let aiSummary = existing.aiSummary ?? "Analysis pending...";
+      let aiSuggestedActionItems = existing.aiSuggestedActionItems ?? "";
+
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are an HR analytics AI. Analyze the employee feedback. Return a JSON object with 'sentiment' (float 0.0 to 1.0), 'summary' (brief 1-sentence summary), and 'suggestedActionItems' (bullet points if blockers or risks are identified)." },
+            { role: "user", content: textToAnalyze }
+          ],
+          response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(response.choices[0].message.content || "{}");
+        aiSentiment = result.sentiment || 0.5;
+        aiSummary = result.summary || "No summary available.";
+        aiSuggestedActionItems = result.suggestedActionItems || "";
+      } catch (aiError) {
+        console.error("AI Analysis failed:", aiError);
+      }
+
+      const updated = await storage.updateFeedback(feedbackId, {
+        satScore: input.satScore,
+        moodScore: input.moodScore,
+        workloadLevel: input.workloadLevel,
+        workLifeBalance: input.workLifeBalance,
+        accomplishments: input.accomplishments,
+        disappointments: input.disappointments,
+        blockers: input.blockers,
+        mentoringCulture: input.mentoringCulture,
+        supportNeeds: input.supportNeeds,
+        goalProgress: input.goalProgress,
+        processSuggestions: input.processSuggestions,
+        ptoCoverage: input.ptoCoverage,
+        aiSentiment,
+        aiSummary,
+        aiSuggestedActionItems,
+      });
+
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        res.status(400).json({ message: err.errors[0].message });
+      } else {
+        console.error("Feedback update error:", err);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    }
+  });
+
   app.post(api.feedback.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.feedback.create.input.parse(req.body);

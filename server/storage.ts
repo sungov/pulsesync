@@ -15,6 +15,7 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
 
   createFeedback(feedback: InsertFeedback & { aiSentiment?: number; aiSummary?: string; aiSuggestedActionItems?: string }): Promise<Feedback>;
+  updateFeedback(id: number, data: Partial<InsertFeedback> & { aiSentiment?: number; aiSummary?: string; aiSuggestedActionItems?: string }): Promise<Feedback>;
   getFeedback(id: number): Promise<Feedback | undefined>;
   getFeedbackByUser(userId: string): Promise<Feedback[]>;
   getAllFeedback(): Promise<Feedback[]>;
@@ -100,6 +101,11 @@ export class DatabaseStorage implements IStorage {
   async createFeedback(insertFeedback: any): Promise<Feedback> {
     const [newItem] = await db.insert(feedback).values(insertFeedback).returning();
     return newItem;
+  }
+
+  async updateFeedback(id: number, data: Partial<InsertFeedback> & { aiSentiment?: number; aiSummary?: string; aiSuggestedActionItems?: string }): Promise<Feedback> {
+    const [updated] = await db.update(feedback).set(data).where(eq(feedback.id, id)).returning();
+    return updated;
   }
 
   async getFeedback(id: number): Promise<Feedback | undefined> {

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCreateFeedback } from "@/hooks/use-pulse-data";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { SyncLoader } from "@/components/SyncLoader";
+import { useToast } from "@/hooks/use-toast";
 import {
   Trophy,
   AlertCircle,
@@ -25,6 +27,7 @@ import {
   Smile,
   CheckCircle2,
   Lock,
+  Pencil,
 } from "lucide-react";
 
 const MOOD_LABELS = ["Burned Out", "Challenged", "Neutral", "Good", "Great"] as const;
@@ -64,6 +67,10 @@ export default function EmployeeFeedback() {
   const [ptoCoverage, setPtoCoverage] = useState("");
 
   const createFeedback = useCreateFeedback();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingFeedbackId, setEditingFeedbackId] = useState<number | null>(null);
 
   const currentPeriod = format(new Date(), "MMM-yyyy");
 
@@ -80,14 +87,59 @@ export default function EmployeeFeedback() {
   const alreadySubmitted = periodCheck?.exists ?? false;
   const isReviewed = periodCheck?.reviewed ?? false;
 
+  const { data: existingFeedback } = useQuery<any>({
+    queryKey: ["/api/feedback", periodCheck?.feedbackId],
+    queryFn: async () => {
+      const res = await fetch(`/api/feedback?userId=${user?.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch feedback");
+      const all = await res.json();
+      return all.find((f: any) => f.id === periodCheck?.feedbackId);
+    },
+    enabled: !!periodCheck?.feedbackId && isEditing,
+  });
+
+  useEffect(() => {
+    if (existingFeedback && isEditing) {
+      setSatScore([existingFeedback.satScore]);
+      const moodIdx = MOOD_LABELS.indexOf(existingFeedback.moodScore as any);
+      setMoodIndex([moodIdx >= 0 ? moodIdx + 1 : 3]);
+      setWorkloadLevel([existingFeedback.workloadLevel]);
+      setWorkLifeBalance([existingFeedback.workLifeBalance]);
+      setAccomplishments(existingFeedback.accomplishments || "");
+      setDisappointments(existingFeedback.disappointments || "");
+      setBlockers(existingFeedback.blockers || "");
+      setMentoringCulture(existingFeedback.mentoringCulture || "");
+      setSupportNeeds(existingFeedback.supportNeeds || "");
+      setGoalProgress(existingFeedback.goalProgress || "");
+      setProcessSuggestions(existingFeedback.processSuggestions || "");
+      setPtoCoverage(existingFeedback.ptoCoverage || "");
+      setEditingFeedbackId(existingFeedback.id);
+    }
+  }, [existingFeedback, isEditing]);
+
+  const updateFeedback = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("PUT", `/api/feedback/${editingFeedbackId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Feedback Updated", description: "Your responses have been saved successfully." });
+      setIsEditing(false);
+      setEditingFeedbackId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/feedback/check-period"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/feedback"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Update Failed", description: err.message || "Could not update feedback.", variant: "destructive" });
+    },
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     const moodScore = MOOD_LABELS[moodIndex[0] - 1];
 
-    await new Promise(r => setTimeout(r, 800));
-
-    createFeedback.mutate({
+    const payload = {
       userId: user.id,
       submissionPeriod: currentPeriod,
       satScore: satScore[0],
@@ -102,7 +154,16 @@ export default function EmployeeFeedback() {
       goalProgress,
       processSuggestions,
       ptoCoverage,
-    }, {
+    };
+
+    if (isEditing && editingFeedbackId) {
+      updateFeedback.mutate(payload);
+      return;
+    }
+
+    await new Promise(r => setTimeout(r, 800));
+
+    createFeedback.mutate(payload, {
       onSuccess: () => {
         setAccomplishments("");
         setDisappointments("");
@@ -141,7 +202,7 @@ export default function EmployeeFeedback() {
             <SyncLoader />
           </CardContent>
         </Card>
-      ) : alreadySubmitted ? (
+      ) : alreadySubmitted && !isEditing ? (
         <Card className="border-border/50 shadow-sm overflow-visible" data-testid="card-already-submitted">
           <div className={`h-2 rounded-t-md ${isReviewed ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-primary to-indigo-400"}`} />
           <CardContent className="py-16 text-center space-y-4">
@@ -158,8 +219,17 @@ export default function EmployeeFeedback() {
                 <CheckCircle2 className="w-12 h-12 mx-auto text-primary/40" />
                 <p className="text-lg font-medium text-foreground">Already Submitted</p>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  You've already submitted your monthly pulse for <span className="font-semibold text-primary">{currentPeriod}</span>. You can submit again next month.
+                  You've already submitted your monthly pulse for <span className="font-semibold text-primary">{currentPeriod}</span>. Since your manager hasn't reviewed it yet, you can still edit your responses.
                 </p>
+                <Button
+                  variant="outline"
+                  className="mt-2"
+                  data-testid="button-edit-feedback"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Edit Responses
+                </Button>
               </>
             )}
           </CardContent>
@@ -169,8 +239,12 @@ export default function EmployeeFeedback() {
           <Card className="border-border/50 shadow-sm overflow-visible">
             <div className="h-2 bg-gradient-to-r from-primary to-indigo-400 rounded-t-md" />
             <CardHeader>
-              <CardTitle>Monthly Check-in</CardTitle>
-              <CardDescription>Share your wins and challenges to help us support you better.</CardDescription>
+              <CardTitle>{isEditing ? "Edit Your Responses" : "Monthly Check-in"}</CardTitle>
+              <CardDescription>
+                {isEditing
+                  ? "Update your responses below. Your wellness score will be recalculated."
+                  : "Share your wins and challenges to help us support you better."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-10">
@@ -446,15 +520,26 @@ export default function EmployeeFeedback() {
                   </div>
                 </section>
 
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end gap-3 pt-4">
+                  {isEditing && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setIsEditing(false)}
+                      data-testid="button-cancel-edit"
+                    >
+                      Cancel
+                    </Button>
+                  )}
                   <Button
                     type="submit"
                     size="lg"
-                    disabled={createFeedback.isPending}
+                    disabled={createFeedback.isPending || updateFeedback.isPending}
                     className="w-full md:w-auto font-semibold shadow-lg shadow-primary/25 transition-all"
                     data-testid="button-submit-feedback"
                   >
-                    Submit Monthly Pulse
+                    {(createFeedback.isPending || updateFeedback.isPending) ? "Saving..." : isEditing ? "Update Responses" : "Submit Monthly Pulse"}
                   </Button>
                 </div>
               </form>
