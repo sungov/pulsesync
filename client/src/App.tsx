@@ -5,13 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
-
-// Import dashboards directly for direct routing if needed
 import ManagerDashboard from "@/pages/ManagerDashboard";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
 import EmployeeDashboard from "@/pages/EmployeeDashboard";
-
-// Layout wrapper for authenticated routes (if separate layout needed)
+import AdminPanel from "@/pages/AdminPanel";
 import { Sidebar } from "@/components/Sidebar";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -31,8 +28,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      
-      {/* Explicit routes for direct navigation via Sidebar */}
       <Route path="/my-feedback">
          <AuthenticatedLayout><EmployeeDashboard /></AuthenticatedLayout>
       </Route>
@@ -45,7 +40,9 @@ function Router() {
       <Route path="/analytics">
          <AuthenticatedLayout><ExecutiveDashboard /></AuthenticatedLayout>
       </Route>
-
+      <Route path="/admin">
+         <AuthenticatedLayout><AdminPanel /></AuthenticatedLayout>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

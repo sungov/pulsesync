@@ -1,33 +1,30 @@
-import { type User, type InsertFeedback, type Feedback, type InsertManagerReview, type ManagerReview, type InsertActionItem, type ActionItem, type UpdateActionItemRequest } from "@shared/schema";
+import { type User, type UpsertUser, type InsertFeedback, type Feedback, type InsertManagerReview, type ManagerReview, type InsertActionItem, type ActionItem, type UpdateActionItemRequest } from "@shared/schema";
 import { db } from "./db";
 import { users, feedback, managerReviews, actionItems } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
-  // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(data: UpsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User>;
+  deleteUser(id: string): Promise<void>;
   getUsersByRole(role: string): Promise<User[]>;
   getUsersByManager(managerEmail: string): Promise<User[]>;
   getAllUsers(): Promise<User[]>;
 
-  // Feedback
   createFeedback(feedback: InsertFeedback & { aiSentiment?: number; aiSummary?: string; aiSuggestedActionItems?: string }): Promise<Feedback>;
   getFeedback(id: number): Promise<Feedback | undefined>;
   getFeedbackByUser(userId: string): Promise<Feedback[]>;
   getAllFeedback(): Promise<Feedback[]>;
 
-  // Reviews
   createManagerReview(review: InsertManagerReview): Promise<ManagerReview>;
   getReviewsByFeedbackId(feedbackId: number): Promise<ManagerReview[]>;
 
-  // Action Items
   createActionItem(item: InsertActionItem): Promise<ActionItem>;
   getActionItems(empEmail?: string, mgrEmail?: string): Promise<ActionItem[]>;
   updateActionItem(id: number, updates: UpdateActionItemRequest): Promise<ActionItem>;
   
-  // Analytics
   getDepartmentStats(): Promise<any[]>;
 }
 
@@ -42,9 +39,18 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async createUser(data: UpsertUser): Promise<User> {
+    const [newUser] = await db.insert(users).values(data).returning();
+    return newUser;
+  }
+
   async updateUser(id: string, updates: Partial<User>): Promise<User> {
     const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return updated;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async getUsersByRole(role: string): Promise<User[]> {

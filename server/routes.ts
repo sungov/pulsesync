@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { setupAuth, isAuthenticated, isAdmin } from "./auth";
+import bcrypt from "bcryptjs";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -17,9 +18,101 @@ export async function registerRoutes(
 ): Promise<Server> {
   
   await setupAuth(app);
-  registerAuthRoutes(app);
 
-  app.post(api.feedback.create.path, async (req, res) => {
+  app.get("/api/admin/users", isAuthenticated, isAdmin, async (req, res) => {
+    const allUsers = await storage.getAllUsers();
+    const safe = allUsers.map(u => {
+      const { password, ...rest } = u;
+      return rest;
+    });
+    res.json(safe);
+  });
+
+  const adminCreateUserSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    role: z.enum(["EMPLOYEE", "MANAGER", "SENIOR_MGMT"]).default("EMPLOYEE"),
+    deptCode: z.string().optional(),
+    managerEmail: z.string().email().optional(),
+  });
+
+  app.post("/api/admin/users", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const parsed = adminCreateUserSchema.parse(req.body);
+      const existing = await storage.getUserByEmail(parsed.email);
+      if (existing) {
+        return res.status(409).json({ message: "User with this email already exists" });
+      }
+      const hashed = await bcrypt.hash(parsed.password, 10);
+      const newUser = await storage.createUser({
+        email: parsed.email,
+        password: hashed,
+        firstName: parsed.firstName || null,
+        lastName: parsed.lastName || null,
+        role: parsed.role,
+        deptCode: parsed.deptCode || null,
+        managerEmail: parsed.managerEmail || null,
+        isApproved: true,
+        isAdmin: false,
+      });
+      const { password: _, ...safe } = newUser;
+      res.status(201).json(safe);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Admin create user error:", err);
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/approve", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const updated = await storage.updateUser(req.params.id, { isApproved: true });
+      const { password, ...safe } = updated;
+      res.json(safe);
+    } catch (err) {
+      res.status(404).json({ message: "User not found" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/role", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { role } = req.body;
+      if (!["EMPLOYEE", "MANAGER", "SENIOR_MGMT"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      const updated = await storage.updateUser(req.params.id, { role });
+      const { password, ...safe } = updated;
+      res.json(safe);
+    } catch (err) {
+      res.status(404).json({ message: "User not found" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/admin", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { isAdmin: makeAdmin } = req.body;
+      const updated = await storage.updateUser(req.params.id, { isAdmin: !!makeAdmin });
+      const { password, ...safe } = updated;
+      res.json(safe);
+    } catch (err) {
+      res.status(404).json({ message: "User not found" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      await storage.deleteUser(req.params.id);
+      res.json({ message: "User deleted" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.post(api.feedback.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.feedback.create.input.parse(req.body);
       
@@ -39,7 +132,7 @@ export async function registerRoutes(
 
       try {
         const response = await openai.chat.completions.create({
-          model: "gpt-5.1",
+          model: "gpt-4o-mini",
           messages: [
             { role: "system", content: "You are an HR analytics AI. Analyze the employee feedback. Return a JSON object with 'sentiment' (float 0.0 to 1.0), 'summary' (brief 1-sentence summary), and 'suggestedActionItems' (bullet points if blockers or risks are identified)." },
             { role: "user", content: textToAnalyze }
@@ -67,12 +160,13 @@ export async function registerRoutes(
       if (err instanceof z.ZodError) {
         res.status(400).json({ message: err.errors[0].message });
       } else {
+        console.error("Feedback creation error:", err);
         res.status(500).json({ message: "Internal Server Error" });
       }
     }
   });
 
-  app.get(api.feedback.list.path, async (req, res) => {
+  app.get(api.feedback.list.path, isAuthenticated, async (req, res) => {
     const userId = req.query.userId as string;
     if (userId) {
       const feedbacks = await storage.getFeedbackByUser(userId);
@@ -82,14 +176,14 @@ export async function registerRoutes(
     res.json(all);
   });
 
-  app.get(api.feedback.get.path, async (req, res) => {
+  app.get(api.feedback.get.path, isAuthenticated, async (req, res) => {
     const id = parseInt(req.params.id);
-    const feedback = await storage.getFeedback(id);
-    if (!feedback) return res.status(404).json({ message: "Not found" });
-    res.json(feedback);
+    const fb = await storage.getFeedback(id);
+    if (!fb) return res.status(404).json({ message: "Not found" });
+    res.json(fb);
   });
 
-  app.post(api.reviews.create.path, async (req, res) => {
+  app.post(api.reviews.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.reviews.create.input.parse(req.body);
       const review = await storage.createManagerReview(input);
@@ -99,7 +193,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.actionItems.create.path, async (req, res) => {
+  app.post(api.actionItems.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.actionItems.create.input.parse(req.body);
       const item = await storage.createActionItem(input);
@@ -109,14 +203,14 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.actionItems.list.path, async (req, res) => {
+  app.get(api.actionItems.list.path, isAuthenticated, async (req, res) => {
     const empEmail = req.query.empEmail as string;
     const mgrEmail = req.query.mgrEmail as string;
     const items = await storage.getActionItems(empEmail, mgrEmail);
     res.json(items);
   });
 
-  app.patch(api.actionItems.update.path, async (req, res) => {
+  app.patch(api.actionItems.update.path, isAuthenticated, async (req, res) => {
     const id = parseInt(req.params.id);
     const updates = req.body;
     try {
@@ -127,34 +221,39 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.users.list.path, async (req, res) => {
+  app.get(api.users.list.path, isAuthenticated, async (req, res) => {
     const role = req.query.role as string;
     const managerEmail = req.query.managerEmail as string;
-    let users = [];
+    let usersList = [];
     if (role) {
-      users = await storage.getUsersByRole(role);
+      usersList = await storage.getUsersByRole(role);
     } else if (managerEmail) {
-      users = await storage.getUsersByManager(managerEmail);
+      usersList = await storage.getUsersByManager(managerEmail);
     } else {
-      users = await storage.getAllUsers();
+      usersList = await storage.getAllUsers();
     }
-    res.json(users);
+    const safe = usersList.map(u => {
+      const { password, ...rest } = u;
+      return rest;
+    });
+    res.json(safe);
   });
 
-  app.patch(api.users.update.path, async (req, res) => {
+  app.patch(api.users.update.path, isAuthenticated, async (req, res) => {
     const id = req.params.id;
     try {
       const updated = await storage.updateUser(id, req.body);
-      res.json(updated);
+      const { password, ...safe } = updated;
+      res.json(safe);
     } catch (err) {
       res.status(404).json({ message: "User not found" });
     }
   });
 
-  app.get(api.analytics.burnout.path, async (req, res) => {
-    const users = await storage.getAllUsers();
+  app.get(api.analytics.burnout.path, isAuthenticated, async (req, res) => {
+    const allUsers = await storage.getAllUsers();
     const results = [];
-    for (const user of users) {
+    for (const user of allUsers) {
       const feedbacks = await storage.getFeedbackByUser(user.id);
       if (feedbacks.length >= 2) {
         const current = feedbacks[0];
@@ -183,7 +282,7 @@ export async function registerRoutes(
     res.json(results);
   });
 
-  app.get(api.analytics.department.path, async (req, res) => {
+  app.get(api.analytics.department.path, isAuthenticated, async (req, res) => {
     const stats = await storage.getDepartmentStats();
     const safeStats = stats.map(s => ({
       deptCode: s.dept_code,

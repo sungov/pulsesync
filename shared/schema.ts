@@ -106,3 +106,4 @@ export type InsertManagerReview = z.infer<typeof insertManagerReviewSchema>;
 
 export type ActionItem = typeof actionItems.$inferSelect;
 export type InsertActionItem = z.infer<typeof insertActionItemSchema>;
+export type UpdateActionItemRequest = Partial<InsertActionItem>;
