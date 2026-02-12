@@ -183,7 +183,7 @@ export default function EmployeeDashboard() {
   }, [filteredFeedback]);
 
   const latest = filteredFeedback.length > 0 ? filteredFeedback[filteredFeedback.length - 1] : null;
-  const previous = filteredFeedback.length > 1 ? filteredFeedback[filteredFeedback.length - 2] : null;
+  const periodStart = filteredFeedback.length > 1 ? filteredFeedback[0] : null;
 
   const relevantActions = useMemo(() => {
     if (!actionItemsRaw || !user?.email) return [];
@@ -298,7 +298,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-primary/10">
                     <Briefcase className="w-4 h-4 text-primary" />
                   </div>
-                  {previous && <TrendIndicator current={latest!.satScore} previous={previous.satScore} />}
+                  {periodStart && <TrendIndicator current={latest!.satScore} previous={periodStart.satScore} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.satScore}/10</p>
                 <p className="text-xs text-muted-foreground mt-1">Work Satisfaction</p>
@@ -311,7 +311,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-amber-500/10">
                     <Smile className="w-4 h-4 text-amber-500" />
                   </div>
-                  {previous && <TrendIndicator current={MOOD_MAP[latest!.moodScore] || 3} previous={MOOD_MAP[previous.moodScore] || 3} />}
+                  {periodStart && <TrendIndicator current={MOOD_MAP[latest!.moodScore] || 3} previous={MOOD_MAP[periodStart.moodScore] || 3} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.moodScore}</p>
                 <p className="text-xs text-muted-foreground mt-1">Overall Mood</p>
@@ -324,7 +324,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-violet-500/10">
                     <Scale className="w-4 h-4 text-violet-500" />
                   </div>
-                  {previous && <TrendIndicator current={latest!.workloadLevel} previous={previous.workloadLevel} />}
+                  {periodStart && <TrendIndicator current={latest!.workloadLevel} previous={periodStart.workloadLevel} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.workloadLevel}/5</p>
                 <p className="text-xs text-muted-foreground mt-1">Workload Level</p>
@@ -337,7 +337,7 @@ export default function EmployeeDashboard() {
                   <div className="p-2 rounded-lg bg-rose-500/10">
                     <HeartHandshake className="w-4 h-4 text-rose-500" />
                   </div>
-                  {previous && <TrendIndicator current={latest!.workLifeBalance} previous={previous.workLifeBalance} />}
+                  {periodStart && <TrendIndicator current={latest!.workLifeBalance} previous={periodStart.workLifeBalance} />}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{latest?.workLifeBalance}/5</p>
                 <p className="text-xs text-muted-foreground mt-1">Work-Life Balance</p>
