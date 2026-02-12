@@ -80,10 +80,10 @@ export default function SeniorMgmtOverview() {
 
   const feedbackParticipation = useMemo(() => {
     if (!deptData || deptData.length === 0) return { submitted: 0, total: 0, rate: "0" };
-    const submitted = deptData.reduce((sum: number, d: any) => sum + (d.totalFeedback || 0), 0);
-    const total = totalEmployees || 1;
-    return { submitted, total, rate: ((submitted / total) * 100).toFixed(0) };
-  }, [deptData, totalEmployees]);
+    const submitted = deptData.reduce((sum: number, d: any) => sum + (d.uniqueSubmitters || 0), 0);
+    const total = (totalEmployees + totalManagers) || 1;
+    return { submitted, total, rate: Math.round((submitted / total) * 100).toString() };
+  }, [deptData, totalEmployees, totalManagers]);
 
   const orgActionStats = useMemo(() => {
     if (!allActionItems) return { total: 0, overdue: 0, completed: 0 };
@@ -149,7 +149,7 @@ export default function SeniorMgmtOverview() {
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <>
                 <div className="text-2xl font-bold">{feedbackParticipation.rate}%</div>
-                <p className="text-xs text-muted-foreground">{feedbackParticipation.submitted} of {feedbackParticipation.total} employees</p>
+                <p className="text-xs text-muted-foreground">{feedbackParticipation.submitted} of {feedbackParticipation.total} staff submitted</p>
               </>
             )}
           </CardContent>

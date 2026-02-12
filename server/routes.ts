@@ -589,6 +589,7 @@ export async function registerRoutes(
         deptCode,
         avgSatScore: currentScore,
         totalFeedback: Number(s.total_feedback),
+        uniqueSubmitters: Number(s.unique_submitters || 0),
         employeeCount,
         prevAvgSatScore: prevScore ?? null,
         trend: prevScore != null ? parseFloat((currentScore - prevScore).toFixed(2)) : null,

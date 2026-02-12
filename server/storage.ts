@@ -220,7 +220,8 @@ export class DatabaseStorage implements IStorage {
         SELECT 
           u.dept_code,
           AVG(f.sat_score) as avg_sat_score,
-          COUNT(f.id) as total_feedback
+          COUNT(f.id) as total_feedback,
+          COUNT(DISTINCT f.user_id) as unique_submitters
         FROM users u
         JOIN feedback f ON u.id = f.user_id
         WHERE f.submission_period = ${period} AND u.is_admin = false
