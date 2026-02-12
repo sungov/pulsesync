@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend, LineChart, Line } from "recharts";
 import { format, subMonths } from "date-fns";
@@ -149,7 +150,7 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
       name: `${e.firstName} ${e.lastName}`,
       sentiment: e.sentimentScaled,
       satisfaction: e.avgSatScore || 0,
-      fill: e.sentimentScaled >= 7 ? "#10b981" : e.sentimentScaled >= 5 ? "#f59e0b" : "#ef4444",
+      fill: e.sentimentScaled >= 7 ? "hsl(var(--chart-2))" : e.sentimentScaled >= 5 ? "hsl(var(--chart-5))" : "hsl(var(--destructive))",
     })),
     [withSentiment]
   );
@@ -548,26 +549,20 @@ export default function ExecutiveDashboard() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap" data-testid="tab-switcher">
-        {(["departments", "projects", "managers"] as ViewTab[]).map(tab => (
-          <Button
-            key={tab}
-            variant={activeTab === tab ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab(tab)}
-            data-testid={`tab-${tab}`}
-            className="toggle-elevate"
-          >
-            {tab === "departments" && <Building2 className="w-4 h-4 mr-1" />}
-            {tab === "projects" && <FolderKanban className="w-4 h-4 mr-1" />}
-            {tab === "managers" && <UserCheck className="w-4 h-4 mr-1" />}
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </Button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ViewTab)}>
+        <TabsList data-testid="tab-switcher">
+          <TabsTrigger value="departments" data-testid="tab-departments">
+            <Building2 className="w-4 h-4 mr-1.5" /> Departments
+          </TabsTrigger>
+          <TabsTrigger value="projects" data-testid="tab-projects">
+            <FolderKanban className="w-4 h-4 mr-1.5" /> Projects
+          </TabsTrigger>
+          <TabsTrigger value="managers" data-testid="tab-managers">
+            <UserCheck className="w-4 h-4 mr-1.5" /> Managers
+          </TabsTrigger>
+        </TabsList>
 
-      {activeTab === "departments" && (
-        <>
+        <TabsContent value="departments" className="space-y-6 mt-4">
           <section data-testid="section-department-cards">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <Building2 className="w-5 h-5" /> Department Overview
@@ -645,7 +640,7 @@ export default function ExecutiveDashboard() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                         <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
                         <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", color: "hsl(var(--card-foreground))" }} />
                         <Legend />
                         {deptHistoryLines.departments.map((dept, i) => (
                           <Line
@@ -681,7 +676,7 @@ export default function ExecutiveDashboard() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                         <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", color: "hsl(var(--card-foreground))" }} />
                         <Bar dataKey="satisfaction" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Satisfaction" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -690,11 +685,10 @@ export default function ExecutiveDashboard() {
               </Card>
             )}
           </section>
-        </>
-      )}
+        </TabsContent>
 
-      {activeTab === "projects" && (
-        <section data-testid="section-project-analytics">
+        <TabsContent value="projects" className="space-y-6 mt-4">
+          <section data-testid="section-project-analytics">
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <FolderKanban className="w-5 h-5" /> Project Analytics
             <span className="text-sm font-normal text-muted-foreground ml-2">Click a project to drill down</span>
@@ -767,7 +761,7 @@ export default function ExecutiveDashboard() {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                           <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
                           <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
-                          <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                          <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", color: "hsl(var(--card-foreground))" }} />
                           <Legend />
                           {projHistoryLines.projects.map((proj, i) => (
                             <Line
@@ -798,7 +792,7 @@ export default function ExecutiveDashboard() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                         <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", color: "hsl(var(--card-foreground))" }} />
                         <Bar dataKey="satisfaction" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} name="Satisfaction" />
                       </BarChart>
                     </ResponsiveContainer>
@@ -808,10 +802,10 @@ export default function ExecutiveDashboard() {
             </>
           )}
         </section>
-      )}
+        </TabsContent>
 
-      {activeTab === "managers" && (
-        <section data-testid="section-manager-performance">
+        <TabsContent value="managers" className="space-y-6 mt-4">
+          <section data-testid="section-manager-performance">
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <UserCheck className="w-5 h-5" /> Manager Performance
           </h2>
@@ -875,7 +869,8 @@ export default function ExecutiveDashboard() {
             </Card>
           )}
         </section>
-      )}
+        </TabsContent>
+      </Tabs>
 
       {(burnoutData?.length ?? 0) > 0 && (
         <section data-testid="section-burnout-risks">
