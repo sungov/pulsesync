@@ -587,7 +587,7 @@ export default function EmployeeFeedback() {
                   </div>
                 </section>
 
-                {user?.managerEmail && !isEditing && (
+                {user?.managerEmail && (
                   <section className="space-y-4">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
