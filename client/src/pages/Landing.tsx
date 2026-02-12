@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import tsworksLogo from "@assets/tsworks_icon_1770895392362.png";
+import tsworksLogo from "@assets/tsworks_logo_transparent.png";
 
 export default function Landing() {
   const { login, signup, isLoggingIn, isSigningUp, loginError, signupError, signupSuccess } = useAuth();

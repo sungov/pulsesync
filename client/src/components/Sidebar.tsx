@@ -12,7 +12,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import tsworksLogo from "@assets/tsworks_icon_1770895392362.png";
+import tsworksLogo from "@assets/tsworks_logo_transparent.png";
 
 export function Sidebar() {
   const [location] = useLocation();
