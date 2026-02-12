@@ -250,6 +250,7 @@ export default function ManagerDashboard() {
                       ?.split(" ")
                       .map((n: string) => n[0])
                       .join("") || "?";
+                    const sentimentScaled = fb.aiSentiment != null ? parseFloat((fb.aiSentiment * 10).toFixed(1)) : null;
                     const sentimentPct = fb.aiSentiment != null ? Math.round(fb.aiSentiment * 100) : null;
                     const moodClasses = moodColorMap[fb.moodScore] || moodColorMap["Neutral"];
 
@@ -269,7 +270,7 @@ export default function ManagerDashboard() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {sentimentPct != null ? (
+                          {sentimentScaled != null ? (
                             <div className="flex items-center gap-2">
                               <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
                                 <div
@@ -277,7 +278,7 @@ export default function ManagerDashboard() {
                                   style={{ width: `${sentimentPct}%` }}
                                 />
                               </div>
-                              <span className="text-xs text-muted-foreground" data-testid={`text-sentiment-${fb.id}`}>{sentimentPct}%</span>
+                              <span className="text-xs text-muted-foreground" data-testid={`text-sentiment-${fb.id}`}>{sentimentScaled}/10</span>
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">N/A</span>
@@ -473,12 +474,12 @@ export default function ManagerDashboard() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   <div className="bg-muted/50 p-3 rounded-md text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Current Mood</p>
-                    <p className="text-2xl font-bold">{risk.currentSentiment ?? '—'}</p>
+                    <p className="text-xs text-muted-foreground mb-1">Current Sentiment</p>
+                    <p className="text-2xl font-bold">{risk.currentSentiment != null ? (risk.currentSentiment * 10).toFixed(1) : '—'}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
                   </div>
                   <div className="bg-muted/50 p-3 rounded-md text-center">
                     <p className="text-xs text-muted-foreground mb-1">Previous</p>
-                    <p className="text-2xl font-bold text-muted-foreground">{risk.previousSentiment ?? '—'}</p>
+                    <p className="text-2xl font-bold text-muted-foreground">{risk.previousSentiment != null ? (risk.previousSentiment * 10).toFixed(1) : '—'}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
                   </div>
                 </div>
               </CardContent>

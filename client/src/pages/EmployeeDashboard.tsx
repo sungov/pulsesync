@@ -178,7 +178,7 @@ export default function EmployeeDashboard() {
       moodLabel: f.moodScore,
       workload: f.workloadLevel,
       balance: f.workLifeBalance,
-      sentiment: f.aiSentiment ? Math.round(f.aiSentiment * 100) : null,
+      sentiment: f.aiSentiment ? parseFloat((f.aiSentiment * 10).toFixed(1)) : null,
     }));
   }, [filteredFeedback]);
 
@@ -374,7 +374,7 @@ export default function EmployeeDashboard() {
                       <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                       <Legend wrapperStyle={{ fontSize: "12px" }} />
                       <Area type="monotone" dataKey="satisfaction" stroke="hsl(var(--primary))" fill="url(#satGrad)" strokeWidth={2} name="Satisfaction" dot={{ r: 3 }} />
-                      <Area type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-2))" fill="url(#sentGrad)" strokeWidth={2} name="AI Sentiment %" dot={{ r: 3 }} />
+                      <Area type="monotone" dataKey="sentiment" stroke="hsl(var(--chart-2))" fill="url(#sentGrad)" strokeWidth={2} name="AI Sentiment (0-10)" dot={{ r: 3 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>

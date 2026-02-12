@@ -77,7 +77,7 @@ function FeedbackHistoryItem({ fb }: { fb: Feedback }) {
               <CardDescription>
                 {fb.createdAt ? format(new Date(fb.createdAt), "MMM d, yyyy") : ""}
                 {fb.aiSentiment !== null && fb.aiSentiment !== undefined && (
-                  <span className="ml-3">Positivity: {Math.round(fb.aiSentiment * 100)}%</span>
+                  <span className="ml-3">Sentiment: {(fb.aiSentiment * 10).toFixed(1)} / 10</span>
                 )}
               </CardDescription>
             </div>
@@ -337,10 +337,13 @@ export default function EmployeeProgress() {
                   <div className="text-center">
                     <p className="text-3xl font-bold text-foreground" data-testid="text-ai-sentiment">
                       {latest?.aiSentiment !== null && latest?.aiSentiment !== undefined
-                        ? `${Math.round(latest.aiSentiment * 100)}%`
+                        ? `${(latest.aiSentiment * 10).toFixed(1)}`
                         : "N/A"}
+                      {latest?.aiSentiment !== null && latest?.aiSentiment !== undefined && (
+                        <span className="text-sm font-normal text-muted-foreground"> / 10</span>
+                      )}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">Overall Positivity</p>
+                    <p className="text-xs text-muted-foreground mt-1">Sentiment Score</p>
                   </div>
                   <div className="text-center">
                     <p className="text-3xl font-bold text-foreground" data-testid="text-submission-count">

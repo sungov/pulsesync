@@ -8,9 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend } from "recharts";
 import { format, subMonths } from "date-fns";
 import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame, TrendingUp, TrendingDown, Award, ArrowUpDown } from "lucide-react";
+
+function scaleSentiment(raw: number): number {
+  return raw * 10;
+}
 import { useToast } from "@/hooks/use-toast";
 
 function generatePeriodOptions() {
@@ -57,33 +61,65 @@ function getManagerInitials(email: string, usersData: any[]) {
 type ViewTab = "departments" | "projects" | "managers";
 type DrilldownType = "dept" | "project";
 
+function ScatterTooltipContent({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+  return (
+    <div className="bg-popover border border-border rounded-md shadow-lg p-3 text-sm">
+      <p className="font-semibold mb-1">{d.name}</p>
+      <p className="text-muted-foreground">Sentiment: <span className="font-medium text-foreground">{d.sentiment.toFixed(1)}</span> / 10</p>
+      <p className="text-muted-foreground">Satisfaction: <span className="font-medium text-foreground">{d.satisfaction.toFixed(1)}</span> / 10</p>
+    </div>
+  );
+}
+
 function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownType }: { data: any[]; usersData: any[]; drilldownLabel: string; drilldownType: DrilldownType }) {
   const [sortBy, setSortBy] = useState<"sentiment" | "satisfaction" | "name">("sentiment");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const scaled = useMemo(() =>
+    data.map(e => ({
+      ...e,
+      sentimentScaled: scaleSentiment(e.latestSentiment || 0),
+      avgSentimentScaled: scaleSentiment(e.avgSentiment || 0),
+    })),
+    [data]
+  );
+
   const sorted = useMemo(() => {
-    const arr = [...data];
+    const arr = [...scaled];
     arr.sort((a, b) => {
       let cmp = 0;
-      if (sortBy === "sentiment") cmp = (a.latestSentiment || 0) - (b.latestSentiment || 0);
+      if (sortBy === "sentiment") cmp = (a.sentimentScaled || 0) - (b.sentimentScaled || 0);
       else if (sortBy === "satisfaction") cmp = (a.avgSatScore || 0) - (b.avgSatScore || 0);
       else cmp = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
       return sortDir === "desc" ? -cmp : cmp;
     });
     return arr;
-  }, [data, sortBy, sortDir]);
+  }, [scaled, sortBy, sortDir]);
 
   const toggleSort = (field: "sentiment" | "satisfaction" | "name") => {
     if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortBy(field); setSortDir("desc"); }
   };
 
-  const topPerformer = sorted.length > 0 && sorted[0].latestSentiment > 0 ? sorted[0] : null;
+  const topPerformer = sorted.length > 0 && sorted[0].sentimentScaled > 0 ? sorted[0] : null;
   const bottomPerformer = sorted.length > 1 ? sorted[sorted.length - 1] : null;
-  const withSentiment = data.filter(e => e.latestSentiment > 0);
+  const withSentiment = scaled.filter(e => e.sentimentScaled > 0);
   const avgSentiment = withSentiment.length > 0
-    ? withSentiment.reduce((s, e) => s + e.latestSentiment, 0) / withSentiment.length
+    ? withSentiment.reduce((s, e) => s + e.sentimentScaled, 0) / withSentiment.length
     : 0;
+
+  const scatterData = useMemo(() =>
+    withSentiment.map(e => ({
+      name: `${e.firstName} ${e.lastName}`,
+      sentiment: e.sentimentScaled,
+      satisfaction: e.avgSatScore || 0,
+      fill: e.sentimentScaled >= 7 ? "#10b981" : e.sentimentScaled >= 5 ? "#f59e0b" : "#ef4444",
+    })),
+    [withSentiment]
+  );
 
   return (
     <div className="space-y-6">
@@ -94,7 +130,7 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
             <p className={`text-2xl font-bold ${getSentimentColor(avgSentiment)}`}>
               {avgSentiment > 0 ? avgSentiment.toFixed(1) : "—"}
             </p>
-            <p className="text-xs text-muted-foreground">{getSentimentLabel(avgSentiment)}</p>
+            <p className="text-xs text-muted-foreground">{getSentimentLabel(avgSentiment)} (out of 10)</p>
           </CardContent>
         </Card>
         {topPerformer && (
@@ -105,11 +141,11 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
                 <p className="text-xs text-muted-foreground">Top Performer</p>
               </div>
               <p className="font-semibold text-sm truncate">{topPerformer.firstName} {topPerformer.lastName}</p>
-              <p className={`text-lg font-bold ${getSentimentColor(topPerformer.latestSentiment)}`}>{topPerformer.latestSentiment.toFixed(1)}</p>
+              <p className={`text-lg font-bold ${getSentimentColor(topPerformer.sentimentScaled)}`}>{topPerformer.sentimentScaled.toFixed(1)}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
             </CardContent>
           </Card>
         )}
-        {bottomPerformer && bottomPerformer.latestSentiment > 0 && (
+        {bottomPerformer && bottomPerformer.sentimentScaled > 0 && (
           <Card data-testid="card-drill-needs-attention">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-1">
@@ -117,35 +153,32 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
                 <p className="text-xs text-muted-foreground">Needs Attention</p>
               </div>
               <p className="font-semibold text-sm truncate">{bottomPerformer.firstName} {bottomPerformer.lastName}</p>
-              <p className={`text-lg font-bold ${getSentimentColor(bottomPerformer.latestSentiment)}`}>{bottomPerformer.latestSentiment.toFixed(1)}</p>
+              <p className={`text-lg font-bold ${getSentimentColor(bottomPerformer.sentimentScaled)}`}>{bottomPerformer.sentimentScaled.toFixed(1)}<span className="text-xs font-normal text-muted-foreground"> / 10</span></p>
             </CardContent>
           </Card>
         )}
       </div>
 
-      {sorted.filter(e => e.latestSentiment > 0).length > 0 && (
+      {scatterData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Sentiment Comparison</CardTitle>
-            <CardDescription>Employee sentiment scores in {drilldownLabel}</CardDescription>
+            <CardTitle className="text-base">Sentiment vs Satisfaction</CardTitle>
+            <CardDescription>Each dot is an employee in {drilldownLabel} — hover for details. Ideal position is top-right.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[280px]">
+          <CardContent className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sorted.filter(e => e.latestSentiment > 0).map(e => ({
-                name: `${e.firstName} ${e.lastName?.[0] || ""}`,
-                sentiment: e.latestSentiment,
-                satisfaction: e.avgSatScore,
-              }))} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis dataKey="name" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
-                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="sentiment" name="Sentiment" radius={[4, 4, 0, 0]}>
-                  {sorted.filter(e => e.latestSentiment > 0).map((e, i) => (
-                    <Cell key={i} fill={e.latestSentiment >= 7 ? "#10b981" : e.latestSentiment >= 5 ? "#f59e0b" : "#ef4444"} />
+              <ScatterChart margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" dataKey="sentiment" name="Sentiment" domain={[0, 10]} stroke="#6b7280" fontSize={12} tickLine={false} label={{ value: "Sentiment (0-10)", position: "bottom", offset: 0, fontSize: 11, fill: "#9ca3af" }} />
+                <YAxis type="number" dataKey="satisfaction" name="Satisfaction" domain={[0, 10]} stroke="#6b7280" fontSize={12} tickLine={false} label={{ value: "Satisfaction (0-10)", angle: -90, position: "insideLeft", offset: 10, fontSize: 11, fill: "#9ca3af" }} />
+                <ZAxis range={[80, 120]} />
+                <Tooltip content={<ScatterTooltipContent />} />
+                <Scatter data={scatterData} isAnimationActive={false}>
+                  {scatterData.map((entry, i) => (
+                    <Cell key={i} fill={entry.fill} />
                   ))}
-                </Bar>
-              </BarChart>
+                </Scatter>
+              </ScatterChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
@@ -201,8 +234,8 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
                     {emp.managerEmail ? getManagerName(emp.managerEmail, usersData) : "—"}
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className={`font-semibold ${getSentimentColor(emp.latestSentiment)}`}>
-                      {emp.latestSentiment > 0 ? emp.latestSentiment.toFixed(1) : "—"}
+                    <span className={`font-semibold ${getSentimentColor(emp.sentimentScaled)}`}>
+                      {emp.sentimentScaled > 0 ? emp.sentimentScaled.toFixed(1) : "—"}
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
@@ -213,10 +246,10 @@ function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownTy
                   <TableCell className="text-center text-sm text-muted-foreground">{emp.totalFeedback}</TableCell>
                   <TableCell className="text-center">
                     <Badge
-                      variant={emp.latestSentiment >= 7 ? "default" : emp.latestSentiment >= 5 ? "secondary" : emp.latestSentiment > 0 ? "destructive" : "outline"}
-                      className={`text-xs ${emp.latestSentiment >= 7 ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}`}
+                      variant={emp.sentimentScaled >= 7 ? "default" : emp.sentimentScaled >= 5 ? "secondary" : emp.sentimentScaled > 0 ? "destructive" : "outline"}
+                      className={`text-xs ${emp.sentimentScaled >= 7 ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}`}
                     >
-                      {getSentimentLabel(emp.latestSentiment)}
+                      {getSentimentLabel(emp.sentimentScaled)}
                     </Badge>
                   </TableCell>
                   <TableCell>
