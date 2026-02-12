@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Brain, ShieldCheck, Zap, Mail, Lock, User, Loader2 } from "lucide-react";
+import { ArrowRight, ShieldCheck, Zap, Mail, Lock, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import tsworksLogo from "@assets/tsworks_icon_1770895392362.png";
 
 export default function Landing() {
   const { login, signup, isLoggingIn, isSigningUp, loginError, signupError, signupSuccess } = useAuth();
@@ -31,12 +32,7 @@ export default function Landing() {
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-12">
-            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center border border-white/20">
-              <Brain className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-display font-bold text-2xl tracking-tight">
-              Pulse<span className="text-indigo-400">Sync</span>
-            </span>
+            <img src={tsworksLogo} alt="tsworks" className="h-10 w-auto brightness-0 invert" data-testid="img-landing-logo" />
           </div>
 
           <h1 className="font-display font-bold text-5xl lg:text-7xl leading-[1.1] mb-6">
@@ -46,7 +42,7 @@ export default function Landing() {
             </span>
           </h1>
           <p className="text-lg text-slate-300 max-w-md font-light leading-relaxed">
-            AI-driven insights for modern teams. Detect burnout, optimize workflows, and align goals with PulseSync's neural architecture.
+            AI-driven insights for modern teams. Detect burnout, optimize workflows, and align goals with PulseSync AI by tsworks.
           </p>
         </div>
 
@@ -64,7 +60,7 @@ export default function Landing() {
         </div>
 
         <div className="relative z-10 text-xs text-slate-500 mt-12">
-          &copy; 2026 PulseSync AI Inc. All rights reserved.
+          &copy; 2026 tsworks. All rights reserved.
         </div>
       </div>
 

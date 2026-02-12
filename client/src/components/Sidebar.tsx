@@ -12,6 +12,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import tsworksLogo from "@assets/tsworks_icon_1770895392362.png";
 
 export function Sidebar() {
   const [location] = useLocation();
@@ -57,12 +58,7 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 h-screen w-64 bg-card border-r border-border shadow-sm flex flex-col z-20">
       <div className="p-6">
         <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold font-display text-lg shadow-lg shadow-primary/30">
-            P
-          </div>
-          <span className="font-display font-bold text-xl tracking-tight text-foreground">
-            Pulse<span className="text-primary">Sync</span>
-          </span>
+          <img src={tsworksLogo} alt="tsworks" className="h-8 w-auto" data-testid="img-sidebar-logo" />
         </div>
 
         <nav className="space-y-1">
