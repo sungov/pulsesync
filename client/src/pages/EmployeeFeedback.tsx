@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Star,
+  Eye,
 } from "lucide-react";
 
 function generatePeriodOptions(): string[] {
@@ -85,6 +86,7 @@ export default function EmployeeFeedback() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
   const [editingFeedbackId, setEditingFeedbackId] = useState<number | null>(null);
 
   const periodOptions = generatePeriodOptions();
@@ -122,7 +124,7 @@ export default function EmployeeFeedback() {
       const all = await res.json();
       return all.find((f: any) => f.id === periodCheck?.feedbackId);
     },
-    enabled: !!periodCheck?.feedbackId && isEditing,
+    enabled: !!periodCheck?.feedbackId && (isEditing || isViewing),
   });
 
   useEffect(() => {
@@ -257,6 +259,7 @@ export default function EmployeeFeedback() {
               onChange={(e) => {
                 setSelectedPeriod(e.target.value);
                 setIsEditing(false);
+                setIsViewing(false);
                 setEditingFeedbackId(null);
               }}
               className="appearance-none bg-card border border-border rounded-md pl-3 pr-8 py-1.5 text-sm font-semibold text-primary cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -281,7 +284,7 @@ export default function EmployeeFeedback() {
             <SyncLoader />
           </CardContent>
         </Card>
-      ) : alreadySubmitted && !isEditing ? (
+      ) : alreadySubmitted && !isEditing && !isViewing ? (
         <Card className="border-border/50 shadow-sm overflow-visible" data-testid="card-already-submitted">
           <div className={`h-2 rounded-t-md ${isReviewed ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-primary to-indigo-400"}`} />
           <CardContent className="py-16 text-center space-y-4">
@@ -290,8 +293,17 @@ export default function EmployeeFeedback() {
                 <Lock className="w-12 h-12 mx-auto text-emerald-500/40" />
                 <p className="text-lg font-medium text-foreground">Feedback Reviewed & Locked</p>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Your feedback for <span className="font-semibold text-primary">{selectedPeriod}</span> has been reviewed by your manager and is now locked. You can view it in your dashboard.
+                  Your feedback for <span className="font-semibold text-primary">{selectedPeriod}</span> has been reviewed by your manager and is now locked.
                 </p>
+                <Button
+                  variant="outline"
+                  className="mt-2"
+                  data-testid="button-view-feedback"
+                  onClick={() => setIsViewing(true)}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View My Responses
+                </Button>
               </>
             ) : (
               <>
@@ -311,6 +323,164 @@ export default function EmployeeFeedback() {
                 </Button>
               </>
             )}
+          </CardContent>
+        </Card>
+      ) : isViewing && existingFeedback ? (
+        <div className="space-y-6">
+          <Card className="border-border/50 shadow-sm overflow-visible">
+            <div className="h-2 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-t-md" />
+            <CardHeader>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-emerald-500" />
+                    Your Submitted Responses
+                  </CardTitle>
+                  <CardDescription>
+                    Read-only view of your feedback for {selectedPeriod}. This feedback has been reviewed and locked.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsViewing(false)}
+                  data-testid="button-close-view"
+                >
+                  Close
+                </Button>
+              </div>
+              {existingFeedback.sentimentScore != null && (
+                <div className="flex items-center gap-3 mt-3 p-3 bg-muted/30 rounded-md border border-border/50">
+                  <Badge variant={existingFeedback.sentimentScore >= 7 ? "default" : existingFeedback.sentimentScore >= 4 ? "secondary" : "destructive"}>
+                    Wellness: {Number(existingFeedback.sentimentScore).toFixed(1)}/10
+                  </Badge>
+                  {existingFeedback.sentimentSummary && (
+                    <span className="text-sm text-muted-foreground">{existingFeedback.sentimentSummary}</span>
+                  )}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <section className="space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  How You Were Feeling
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-primary" /> Work Satisfaction
+                    </span>
+                    <Badge variant={getScaleVariant(existingFeedback.satScore, 10)} data-testid="view-badge-sat">
+                      {SAT_LABELS[existingFeedback.satScore - 1]} ({existingFeedback.satScore}/10)
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <Smile className="w-4 h-4 text-amber-500" /> Overall Mood
+                    </span>
+                    <Badge variant={getScaleVariant(MOOD_LABELS.indexOf(existingFeedback.moodScore) + 1, 5)} data-testid="view-badge-mood">
+                      {existingFeedback.moodScore}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-violet-500" /> Workload Level
+                    </span>
+                    <Badge variant={getInverseScaleVariant(existingFeedback.workloadLevel, 5)} data-testid="view-badge-workload">
+                      {WORKLOAD_LABELS[existingFeedback.workloadLevel - 1]} ({existingFeedback.workloadLevel}/5)
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <HeartHandshake className="w-4 h-4 text-rose-500" /> Work-Life Balance
+                    </span>
+                    <Badge variant={getScaleVariant(existingFeedback.workLifeBalance, 5)} data-testid="view-badge-balance">
+                      {BALANCE_LABELS[existingFeedback.workLifeBalance - 1]} ({existingFeedback.workLifeBalance}/5)
+                    </Badge>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Trophy className="w-4 h-4" />
+                  Performance Narrative
+                </h3>
+                <div className="space-y-4">
+                  {[
+                    { label: "Key Accomplishments", icon: Trophy, color: "text-amber-500", value: existingFeedback.accomplishments },
+                    { label: "Top Disappointments", icon: ThumbsDown, color: "text-slate-500", value: existingFeedback.disappointments },
+                    { label: "Blockers & Risks", icon: AlertCircle, color: "text-rose-500", value: existingFeedback.blockers },
+                    { label: "Mentoring & Culture", icon: Users, color: "text-teal-500", value: existingFeedback.mentoringCulture },
+                  ].map((item) => (
+                    <div key={item.label} className="space-y-1">
+                      <Label className="flex items-center gap-2 text-sm">
+                        <item.icon className={`w-4 h-4 ${item.color}`} />
+                        {item.label}
+                      </Label>
+                      <div className="p-3 bg-muted/30 rounded-md border border-border/50 text-sm text-foreground whitespace-pre-wrap" data-testid={`view-text-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                        {item.value || <span className="text-muted-foreground italic">No response provided</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4" />
+                  Growth & Planning
+                </h3>
+                <div className="space-y-4">
+                  {[
+                    { label: "Support Needs", icon: HeartHandshake, color: "text-blue-500", value: existingFeedback.supportNeeds },
+                    { label: "Goal Progress", icon: Target, color: "text-emerald-500", value: existingFeedback.goalProgress },
+                    { label: "Process Suggestions", icon: Lightbulb, color: "text-amber-500", value: existingFeedback.processSuggestions },
+                    { label: "PTO & Coverage", icon: CalendarDays, color: "text-indigo-500", value: existingFeedback.ptoCoverage },
+                  ].map((item) => (
+                    <div key={item.label} className="space-y-1">
+                      <Label className="flex items-center gap-2 text-sm">
+                        <item.icon className={`w-4 h-4 ${item.color}`} />
+                        {item.label}
+                      </Label>
+                      <div className="p-3 bg-muted/30 rounded-md border border-border/50 text-sm text-foreground whitespace-pre-wrap" data-testid={`view-text-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                        {item.value || <span className="text-muted-foreground italic">No response provided</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {mgrFeedbackCheck?.submitted && (
+                <section className="space-y-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" />
+                    Anonymous Manager Feedback
+                  </h3>
+                  <Card className="border-border/50 bg-muted/30">
+                    <CardContent className="pt-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Star className="w-4 h-4 text-amber-500" />
+                        <span className="text-sm font-medium">Rating:</span>
+                        <Badge variant={mgrFeedbackCheck.rating && mgrFeedbackCheck.rating >= 4 ? "default" : mgrFeedbackCheck.rating && mgrFeedbackCheck.rating >= 3 ? "secondary" : "destructive"}>
+                          {mgrFeedbackCheck.rating}/5
+                        </Badge>
+                      </div>
+                      <div className="p-3 bg-background rounded-md border border-border/50 text-sm text-foreground whitespace-pre-wrap" data-testid="view-text-mgr-feedback">
+                        {mgrFeedbackCheck.feedbackText || <span className="text-muted-foreground italic">No feedback provided</span>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </section>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : isViewing && !existingFeedback ? (
+        <Card className="border-border/50 shadow-sm overflow-visible">
+          <div className="h-2 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-t-md" />
+          <CardContent className="py-16 text-center">
+            <SyncLoader />
           </CardContent>
         </Card>
       ) : (
