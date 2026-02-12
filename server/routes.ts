@@ -779,6 +779,43 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  // === SENTIMENT DISTRIBUTION & TOP BLOCKERS ===
+
+  app.get("/api/analytics/sentiment-distribution", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    const groupBy = (req.query.groupBy as string) === "project" ? "project" as const : "dept" as const;
+    if (!period) {
+      return res.status(400).json({ message: "period is required" });
+    }
+    const data = await storage.getSentimentDistribution(period, groupBy);
+    const result = data.map((row: any) => ({
+      group: row.dept_code || row.project_code || "General",
+      excellent: Number(row.excellent),
+      good: Number(row.good),
+      fair: Number(row.fair),
+      low: Number(row.low),
+      noData: Number(row.no_data),
+      total: Number(row.total),
+    }));
+    res.json(result);
+  });
+
+  app.get("/api/analytics/top-blockers", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    const groupBy = (req.query.groupBy as string) === "project" ? "project" as const : "dept" as const;
+    if (!period) {
+      return res.status(400).json({ message: "period is required" });
+    }
+    const data = await storage.getTopBlockers(period, groupBy);
+    const result = data.map((row: any) => ({
+      group: row.dept_code || row.project_code || "General",
+      blockers: row.blockers,
+      sentiment: Number(row.ai_sentiment) || 0,
+      satisfaction: Number(row.sat_score) || 0,
+    }));
+    res.json(result);
+  });
+
   // === MANAGER FEEDBACK (Anonymous) ROUTES ===
 
   const createManagerFeedbackSchema = z.object({

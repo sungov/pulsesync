@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { useProjectTrends, useUsersList, useEmployeePerformance, useProjectHistory } from "@/hooks/use-pulse-data";
+import { useProjectTrends, useUsersList, useEmployeePerformance, useProjectHistory, useSentimentDistribution, useTopBlockers } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend, LineChart, Line } from "recharts";
 import { format, subMonths } from "date-fns";
-import { Users, FolderKanban, ArrowLeft, AlertTriangle, Eye, TrendingUp, TrendingDown, Award, ArrowUpDown } from "lucide-react";
+import { Users, FolderKanban, ArrowLeft, AlertTriangle, Eye, TrendingUp, TrendingDown, Award, ArrowUpDown, ShieldAlert } from "lucide-react";
 
 function scaleSentiment(raw: number): number {
   return raw;
@@ -305,19 +305,21 @@ export default function ProjectAnalysis() {
   const { data: usersData } = useUsersList();
   const { data: projEmployees, isLoading: projEmpLoading } = useEmployeePerformance(undefined, selectedProject || undefined);
   const { data: projHistoryRaw, isLoading: projHistLoading } = useProjectHistory(period, compareMode === "year");
+  const { data: sentimentDist, isLoading: sentDistLoading } = useSentimentDistribution(period, "project");
+  const { data: topBlockers, isLoading: blockersLoading } = useTopBlockers(period, "project");
 
   const allUsersArr = (usersData as any[]) || [];
   const showTrends = compareMode === "month" || compareMode === "quarter";
 
-  const projectChartData = useMemo(() =>
-    projectData?.map((p: any) => ({
-      name: p.projectCode || "N/A",
-      satisfaction: p.avgSatScore,
-      employees: p.employeeCount,
-      feedback: p.totalFeedback,
-    })) || [],
-    [projectData]
-  );
+  const blockersByProject = useMemo(() => {
+    if (!topBlockers) return {};
+    const grouped: Record<string, { blockers: string; sentiment: number; satisfaction: number }[]> = {};
+    for (const b of topBlockers) {
+      if (!grouped[b.group]) grouped[b.group] = [];
+      grouped[b.group].push(b);
+    }
+    return grouped;
+  }, [topBlockers]);
 
   const projHistoryLines = useMemo(() => {
     if (!projHistoryRaw || !Array.isArray(projHistoryRaw)) return { chartData: [], projects: [] };
@@ -452,7 +454,7 @@ export default function ProjectAnalysis() {
               })}
             </div>
 
-            {compareMode === "year" ? (
+            {compareMode === "year" && (
               <Card>
                 <CardHeader>
                   <CardTitle>Project Satisfaction Trend</CardTitle>
@@ -488,25 +490,82 @@ export default function ProjectAnalysis() {
                   )}
                 </CardContent>
               </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Project Satisfaction Comparison</CardTitle>
-                  <CardDescription>Average satisfaction scores across projects ({period})</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[350px]">
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Sentiment Distribution</CardTitle>
+                <CardDescription>Employee wellness breakdown by project ({period}) -- how many employees fall into each sentiment tier</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[380px]">
+                {sentDistLoading ? (
+                  <div className="flex items-center justify-center h-full"><Skeleton className="h-full w-full" /></div>
+                ) : !sentimentDist || sentimentDist.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">No sentiment data available</div>
+                ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={projectChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart data={sentimentDist} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                      <XAxis dataKey="group" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                       <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", color: "hsl(var(--card-foreground))" }} />
-                      <Bar dataKey="satisfaction" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} name="Satisfaction" />
+                      <Legend />
+                      <Bar dataKey="excellent" stackId="a" fill="hsl(142, 71%, 45%)" name="Excellent (7-10)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="good" stackId="a" fill="hsl(200, 80%, 50%)" name="Good (5-7)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="fair" stackId="a" fill="hsl(38, 92%, 50%)" name="Fair (3-5)" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="low" stackId="a" fill="hsl(0, 72%, 51%)" name="Low (<3)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-orange-500" />
+                  Top Blockers & Common Themes
+                </CardTitle>
+                <CardDescription>Most impactful blockers reported by employees ({period}) -- sorted by lowest sentiment first</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {blockersLoading ? (
+                  <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+                ) : !topBlockers || topBlockers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No blockers reported this period</div>
+                ) : (
+                  <div className="space-y-6">
+                    {Object.entries(blockersByProject).map(([proj, items]) => (
+                      <div key={proj}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <FolderKanban className="w-4 h-4 text-muted-foreground" />
+                          <h3 className="font-semibold text-sm text-foreground">{proj}</h3>
+                          <Badge variant="secondary" className="text-xs">{items.length} blocker{items.length !== 1 ? "s" : ""}</Badge>
+                        </div>
+                        <div className="space-y-2 pl-6">
+                          {items.slice(0, 5).map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
+                              <div className="flex-shrink-0 mt-0.5">
+                                <Badge
+                                  variant={item.sentiment >= 7 ? "default" : item.sentiment >= 5 ? "secondary" : "destructive"}
+                                  className={`text-xs min-w-[3rem] justify-center ${item.sentiment >= 7 ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}`}
+                                >
+                                  {item.sentiment.toFixed(1)}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground leading-relaxed">{item.blockers}</p>
+                            </div>
+                          ))}
+                          {items.length > 5 && (
+                            <p className="text-xs text-muted-foreground pl-1">+{items.length - 5} more blockers in {proj}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </section>

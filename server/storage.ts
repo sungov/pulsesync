@@ -49,6 +49,9 @@ export interface IStorage {
   getManagerFeedbackBySubmitter(userId: string, period: string): Promise<ManagerFeedbackEntry | undefined>;
   getManagerFeedbackForSenior(managerEmail?: string, period?: string): Promise<any[]>;
   getManagerFeedbackSummary(): Promise<any[]>;
+
+  getSentimentDistribution(period: string, groupBy: "dept" | "project"): Promise<any[]>;
+  getTopBlockers(period: string, groupBy: "dept" | "project"): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -479,6 +482,51 @@ export class DatabaseStorage implements IStorage {
       LEFT JOIN users mgr ON mgr.email = mf.manager_email
       GROUP BY mf.manager_email, mgr.first_name, mgr.last_name, mgr.dept_code
       ORDER BY AVG(mf.rating) ASC
+    `);
+    return result.rows;
+  }
+
+  async getSentimentDistribution(period: string, groupBy: "dept" | "project"): Promise<any[]> {
+    const groupCol = groupBy === "project" ? sql`u.project_code` : sql`u.dept_code`;
+    const groupLabel = groupBy === "project" ? "project_code" : "dept_code";
+    const projectFilter = groupBy === "project" ? sql` AND u.project_code IS NOT NULL AND u.project_code != ''` : sql``;
+    const result = await db.execute(sql`
+      SELECT 
+        ${groupCol} as ${sql.raw(groupLabel)},
+        COUNT(*) FILTER (WHERE f.ai_sentiment >= 7) as excellent,
+        COUNT(*) FILTER (WHERE f.ai_sentiment >= 5 AND f.ai_sentiment < 7) as good,
+        COUNT(*) FILTER (WHERE f.ai_sentiment >= 3 AND f.ai_sentiment < 5) as fair,
+        COUNT(*) FILTER (WHERE f.ai_sentiment < 3 AND f.ai_sentiment > 0) as low,
+        COUNT(*) FILTER (WHERE f.ai_sentiment IS NULL OR f.ai_sentiment = 0) as no_data,
+        COUNT(*) as total
+      FROM users u
+      JOIN feedback f ON u.id = f.user_id
+      WHERE f.submission_period = ${period} AND u.is_admin = false ${projectFilter}
+      GROUP BY ${groupCol}
+      ORDER BY ${groupCol}
+    `);
+    return result.rows;
+  }
+
+  async getTopBlockers(period: string, groupBy: "dept" | "project"): Promise<any[]> {
+    const groupCol = groupBy === "project" ? sql`u.project_code` : sql`u.dept_code`;
+    const groupLabel = groupBy === "project" ? "project_code" : "dept_code";
+    const projectFilter = groupBy === "project" ? sql` AND u.project_code IS NOT NULL AND u.project_code != ''` : sql``;
+    const result = await db.execute(sql`
+      SELECT 
+        ${groupCol} as ${sql.raw(groupLabel)},
+        f.blockers,
+        f.ai_sentiment,
+        f.sat_score
+      FROM users u
+      JOIN feedback f ON u.id = f.user_id
+      WHERE f.submission_period = ${period} 
+        AND u.is_admin = false 
+        AND f.blockers IS NOT NULL 
+        AND f.blockers != ''
+        AND LOWER(TRIM(f.blockers)) NOT IN ('none', 'n/a', 'na', 'no', 'nothing', '-', 'no blockers', 'no blockers this period', 'nil')
+        ${projectFilter}
+      ORDER BY f.ai_sentiment ASC, f.sat_score ASC
     `);
     return result.rows;
   }

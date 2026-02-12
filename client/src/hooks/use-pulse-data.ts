@@ -345,6 +345,34 @@ export function useEmployeePerformance(dept?: string, project?: string) {
   });
 }
 
+// === SENTIMENT DISTRIBUTION & BLOCKERS ===
+
+export function useSentimentDistribution(period?: string, groupBy: "dept" | "project" = "dept") {
+  const qs = period ? `?period=${period}&groupBy=${groupBy}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/sentiment-distribution", period, groupBy],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/sentiment-distribution${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch sentiment distribution");
+      return res.json();
+    },
+    enabled: !!period,
+  });
+}
+
+export function useTopBlockers(period?: string, groupBy: "dept" | "project" = "dept") {
+  const qs = period ? `?period=${period}&groupBy=${groupBy}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/top-blockers", period, groupBy],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/top-blockers${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch top blockers");
+      return res.json();
+    },
+    enabled: !!period,
+  });
+}
+
 // === USERS HOOKS ===
 
 export function useUsersList(role?: string, managerEmail?: string) {
