@@ -269,6 +269,32 @@ export function useProjectAnalytics(period?: string) {
   });
 }
 
+export function useDepartmentTrends(period?: string) {
+  const queryString = period ? `?period=${period}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/department-trends", period],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/department-trends${queryString}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch department trends");
+      return res.json();
+    },
+    enabled: !!period,
+  });
+}
+
+export function useProjectTrends(period?: string) {
+  const queryString = period ? `?period=${period}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/project-trends", period],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/project-trends${queryString}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch project trends");
+      return res.json();
+    },
+    enabled: !!period,
+  });
+}
+
 export function useEmployeePerformance(dept?: string, project?: string) {
   const params = new URLSearchParams();
   if (dept) params.append("dept", dept);

@@ -419,6 +419,94 @@ export async function registerRoutes(
     res.json(safeData);
   });
 
+  app.get("/api/analytics/department-trends", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    if (!period) {
+      return res.status(400).json({ message: "period is required (e.g., Feb-2026)" });
+    }
+    const [monthStr, yearStr] = period.split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const monthIdx = months.indexOf(monthStr);
+    const year = parseInt(yearStr);
+    let prevPeriod: string;
+    if (monthIdx === 0) {
+      prevPeriod = `Dec-${year - 1}`;
+    } else {
+      prevPeriod = `${months[monthIdx - 1]}-${year}`;
+    }
+
+    const [currentStats, prevStats] = await Promise.all([
+      storage.getDepartmentStatsWithPeriod(period),
+      storage.getDepartmentStatsWithPeriod(prevPeriod),
+    ]);
+
+    const prevMap = new Map<string, number>();
+    for (const s of prevStats) {
+      prevMap.set(s.dept_code || "General", Number(s.avg_sat_score));
+    }
+
+    const allUsers = await storage.getAllUsers();
+    const nonAdminUsers = allUsers.filter(u => !u.isAdmin);
+
+    const result = currentStats.map(s => {
+      const deptCode = s.dept_code || "General";
+      const currentScore = Number(s.avg_sat_score);
+      const prevScore = prevMap.get(deptCode);
+      const employeeCount = nonAdminUsers.filter(u => u.deptCode === deptCode).length;
+      return {
+        deptCode,
+        avgSatScore: currentScore,
+        totalFeedback: Number(s.total_feedback),
+        employeeCount,
+        prevAvgSatScore: prevScore ?? null,
+        trend: prevScore != null ? parseFloat((currentScore - prevScore).toFixed(2)) : null,
+      };
+    });
+    res.json(result);
+  });
+
+  app.get("/api/analytics/project-trends", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    if (!period) {
+      return res.status(400).json({ message: "period is required (e.g., Feb-2026)" });
+    }
+    const [monthStr, yearStr] = period.split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const monthIdx = months.indexOf(monthStr);
+    const year = parseInt(yearStr);
+    let prevPeriod: string;
+    if (monthIdx === 0) {
+      prevPeriod = `Dec-${year - 1}`;
+    } else {
+      prevPeriod = `${months[monthIdx - 1]}-${year}`;
+    }
+
+    const [currentStats, prevStats] = await Promise.all([
+      storage.getProjectAnalytics(period),
+      storage.getProjectAnalytics(prevPeriod),
+    ]);
+
+    const prevMap = new Map<string, number>();
+    for (const s of prevStats) {
+      prevMap.set(s.project_code, Number(s.avg_sat_score));
+    }
+
+    const result = currentStats.map((s: any) => {
+      const projectCode = s.project_code;
+      const currentScore = Number(s.avg_sat_score);
+      const prevScore = prevMap.get(projectCode);
+      return {
+        projectCode,
+        employeeCount: Number(s.employee_count),
+        avgSatScore: currentScore,
+        totalFeedback: Number(s.total_feedback),
+        prevAvgSatScore: prevScore ?? null,
+        trend: prevScore != null ? parseFloat((currentScore - prevScore).toFixed(2)) : null,
+      };
+    });
+    res.json(result);
+  });
+
   app.get("/api/analytics/employee-performance", isAuthenticated, async (req, res) => {
     const dept = req.query.dept as string | undefined;
     const project = req.query.project as string | undefined;

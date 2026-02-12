@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { useDepartmentAnalytics, useLeaderAccountability, useUsersList, useProjectAnalytics, useBurnoutRadar, useEmployeePerformance } from "@/hooks/use-pulse-data";
+import { useDepartmentTrends, useLeaderAccountability, useUsersList, useProjectTrends, useBurnoutRadar, useEmployeePerformance } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -277,10 +277,10 @@ export default function ExecutiveDashboard() {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>("departments");
 
-  const { data: deptData, isLoading: deptLoading } = useDepartmentAnalytics(period);
+  const { data: deptData, isLoading: deptLoading } = useDepartmentTrends(period);
   const { data: leaderData, isLoading: leaderLoading } = useLeaderAccountability();
   const { data: usersData, isLoading: usersLoading } = useUsersList();
-  const { data: projectData, isLoading: projectLoading } = useProjectAnalytics(period);
+  const { data: projectData, isLoading: projectLoading } = useProjectTrends(period);
   const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
   const { data: deptEmployees, isLoading: deptEmpLoading } = useEmployeePerformance(selectedDept || undefined);
   const { data: projEmployees, isLoading: projEmpLoading } = useEmployeePerformance(undefined, selectedProject || undefined);
@@ -496,28 +496,46 @@ export default function ExecutiveDashboard() {
               <Card><CardContent className="p-8 text-center"><Building2 className="w-10 h-10 mx-auto text-muted-foreground mb-3" /><p className="text-muted-foreground">No department data available for this period.</p></CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {deptData.map((dept, idx) => (
-                  <Card
-                    key={dept.deptCode || idx}
-                    className="cursor-pointer hover-elevate transition-colors"
-                    onClick={() => setSelectedDept(dept.deptCode || "General")}
-                    data-testid={`card-department-${dept.deptCode || idx}`}
-                  >
-                    <CardContent className="p-5">
-                      <p className="text-sm font-medium text-muted-foreground mb-2">{dept.deptCode || "General"}</p>
-                      <p className={`text-3xl font-bold ${getSentimentColor(dept.avgSatScore)}`} data-testid={`text-dept-score-${dept.deptCode || idx}`}>
-                        {typeof dept.avgSatScore === "number" ? dept.avgSatScore.toFixed(1) : "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Avg. Satisfaction</p>
-                      <div className="flex items-center gap-1 mt-3">
-                        <Users className="w-3 h-3 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground" data-testid={`text-dept-feedback-${dept.deptCode || idx}`}>
-                          {dept.totalFeedback} feedback{dept.totalFeedback !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {deptData.map((dept: any, idx: number) => {
+                  const trend = dept.trend;
+                  return (
+                    <Card
+                      key={dept.deptCode || idx}
+                      className="cursor-pointer hover-elevate transition-colors"
+                      onClick={() => setSelectedDept(dept.deptCode || "General")}
+                      data-testid={`card-department-${dept.deptCode || idx}`}
+                    >
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-sm font-medium text-muted-foreground">{dept.deptCode || "General"}</p>
+                          {trend != null && trend > 0.2 && (
+                            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-xs">
+                              <TrendingUp className="w-3 h-3 mr-0.5" /> +{trend.toFixed(1)}
+                            </Badge>
+                          )}
+                          {trend != null && trend < -0.2 && (
+                            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-xs">
+                              <TrendingDown className="w-3 h-3 mr-0.5" /> {trend.toFixed(1)}
+                            </Badge>
+                          )}
+                          {trend != null && Math.abs(trend) <= 0.2 && (
+                            <span className="text-xs text-muted-foreground">Stable</span>
+                          )}
+                        </div>
+                        <p className={`text-3xl font-bold ${getSentimentColor(dept.avgSatScore)}`} data-testid={`text-dept-score-${dept.deptCode || idx}`}>
+                          {typeof dept.avgSatScore === "number" ? dept.avgSatScore.toFixed(1) : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">Avg. Satisfaction</p>
+                        <div className="flex items-center gap-1 mt-3">
+                          <Users className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground" data-testid={`text-dept-employees-${dept.deptCode || idx}`}>
+                            {dept.employeeCount ?? 0} employees
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -567,29 +585,44 @@ export default function ExecutiveDashboard() {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {projectData.map((proj: any, idx: number) => (
-                  <Card
-                    key={proj.projectCode || idx}
-                    className="cursor-pointer hover-elevate transition-colors"
-                    onClick={() => setSelectedProject(proj.projectCode)}
-                    data-testid={`card-project-${proj.projectCode || idx}`}
-                  >
-                    <CardContent className="p-5">
-                      <p className="text-sm font-medium text-muted-foreground mb-2">{proj.projectCode}</p>
-                      <p className={`text-3xl font-bold ${getSentimentColor(proj.avgSatScore)}`}>
-                        {typeof proj.avgSatScore === "number" ? proj.avgSatScore.toFixed(1) : "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Avg. Satisfaction</p>
-                      <div className="flex items-center gap-3 mt-3 flex-wrap">
-                        <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">{proj.employeeCount} members</span>
+                {projectData.map((proj: any, idx: number) => {
+                  const trend = proj.trend;
+                  return (
+                    <Card
+                      key={proj.projectCode || idx}
+                      className="cursor-pointer hover-elevate transition-colors"
+                      onClick={() => setSelectedProject(proj.projectCode)}
+                      data-testid={`card-project-${proj.projectCode || idx}`}
+                    >
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-sm font-medium text-muted-foreground">{proj.projectCode}</p>
+                          {trend != null && trend > 0.2 && (
+                            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-xs">
+                              <TrendingUp className="w-3 h-3 mr-0.5" /> +{trend.toFixed(1)}
+                            </Badge>
+                          )}
+                          {trend != null && trend < -0.2 && (
+                            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-xs">
+                              <TrendingDown className="w-3 h-3 mr-0.5" /> {trend.toFixed(1)}
+                            </Badge>
+                          )}
+                          {trend != null && Math.abs(trend) <= 0.2 && (
+                            <span className="text-xs text-muted-foreground">Stable</span>
+                          )}
                         </div>
-                        <span className="text-sm text-muted-foreground">{proj.totalFeedback} feedbacks</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        <p className={`text-3xl font-bold ${getSentimentColor(proj.avgSatScore)}`}>
+                          {typeof proj.avgSatScore === "number" ? proj.avgSatScore.toFixed(1) : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">Avg. Satisfaction</p>
+                        <div className="flex items-center gap-1 mt-3">
+                          <Users className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">{proj.employeeCount ?? 0} members</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
 
               <Card>

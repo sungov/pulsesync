@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useDepartmentAnalytics, useLeaderAccountability, useBurnoutRadar, useActionItemsForUser, useUsersList } from "@/hooks/use-pulse-data";
+import { useDepartmentTrends, useLeaderAccountability, useBurnoutRadar, useActionItemsForUser, useUsersList } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Building2, Users, Flame, ArrowRight, AlertTriangle,
   ClipboardCheck, ListTodo, CheckCircle2,
-  Clock, TrendingDown
+  Clock, TrendingDown, TrendingUp, Minus
 } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -37,7 +37,7 @@ function getSentimentColor(score: number) {
 
 export default function SeniorMgmtOverview() {
   const { user } = useAuth();
-  const { data: deptData, isLoading: deptLoading } = useDepartmentAnalytics();
+  const { data: deptData, isLoading: deptLoading } = useDepartmentTrends(currentPeriod);
   const { data: leaderData, isLoading: leaderLoading } = useLeaderAccountability();
   const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
   const { data: reportees, isLoading: reporteesLoading } = useUsersList(undefined, user?.email || "");
@@ -197,33 +197,40 @@ export default function SeniorMgmtOverview() {
               <div className="space-y-3">
                 {deptData.slice(0, 6).map((dept: any, idx: number) => {
                   const score = typeof dept.avgSatScore === "number" ? dept.avgSatScore : 0;
-                  const pct = Math.min(score * 10, 100);
+                  const trend = dept.trend;
                   return (
-                    <div key={dept.deptCode || idx} className="space-y-1" data-testid={`row-dept-health-${dept.deptCode}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm font-medium truncate">{dept.deptCode || "General"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-sm font-semibold ${getSentimentColor(score)}`}>
-                            {score.toFixed(1)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">/10</span>
-                          {score < 5 && (
-                            <Badge variant="destructive" className="text-xs">
-                              <TrendingDown className="w-3 h-3 mr-1" /> Low
-                            </Badge>
-                          )}
+                    <div key={dept.deptCode || idx} className="flex items-center justify-between gap-3" data-testid={`row-dept-health-${dept.deptCode}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium truncate block">{dept.deptCode || "General"}</span>
+                          <span className="text-xs text-muted-foreground">{dept.employeeCount ?? 0} employees</span>
                         </div>
                       </div>
-                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${score >= 7 ? "bg-green-500" : score >= 5 ? "bg-orange-400" : "bg-destructive"}`}
-                          style={{ width: `${pct}%` }}
-                        />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-sm font-semibold ${getSentimentColor(score)}`}>
+                          {score.toFixed(1)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">/10</span>
+                        {trend != null && trend > 0.2 && (
+                          <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-xs">
+                            <TrendingUp className="w-3 h-3 mr-0.5" /> +{trend.toFixed(1)}
+                          </Badge>
+                        )}
+                        {trend != null && trend < -0.2 && (
+                          <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-xs">
+                            <TrendingDown className="w-3 h-3 mr-0.5" /> {trend.toFixed(1)}
+                          </Badge>
+                        )}
+                        {trend != null && Math.abs(trend) <= 0.2 && (
+                          <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate text-xs">
+                            <Minus className="w-3 h-3 mr-0.5" /> Stable
+                          </Badge>
+                        )}
+                        {trend == null && (
+                          <span className="text-xs text-muted-foreground">New</span>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground">{dept.totalFeedback} feedback{dept.totalFeedback !== 1 ? "s" : ""} submitted</p>
                     </div>
                   );
                 })}
