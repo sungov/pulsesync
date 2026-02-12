@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend, LineChart, Line } from "recharts";
 import { format, subMonths } from "date-fns";
-import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame, TrendingUp, TrendingDown, Award, ArrowUpDown } from "lucide-react";
+import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame, TrendingUp, TrendingDown, Award, ArrowUpDown, ShieldCheck, MessageSquare, Star } from "lucide-react";
 
 function scaleSentiment(raw: number): number {
   return raw;
