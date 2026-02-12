@@ -35,6 +35,7 @@ export interface IStorage {
   getTeamFeedbackWithReview(managerEmail: string, period?: string): Promise<any[]>;
   getLeaderAccountability(): Promise<any[]>;
   getProjectAnalytics(period?: string): Promise<any[]>;
+  getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -252,10 +253,44 @@ export class DatabaseStorage implements IStorage {
         COUNT(f.id) as total_feedback
       FROM users u
       JOIN feedback f ON u.id = f.user_id
-      WHERE u.project_code IS NOT NULL AND u.project_code != ''
+      WHERE u.project_code IS NOT NULL AND u.project_code != '' AND u.is_admin = false
       ${periodClause}
       GROUP BY u.project_code
       ORDER BY avg_sat_score ASC
+    `);
+    return result.rows;
+  }
+
+  async getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]> {
+    const fieldColumn = filterField === "project_code" ? sql`u.project_code` : sql`u.dept_code`;
+    const result = await db.execute(sql`
+      SELECT 
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.role,
+        u.dept_code,
+        u.project_code,
+        u.manager_email,
+        COALESCE(perf.avg_sentiment, 0) as avg_sentiment,
+        COALESCE(perf.latest_sentiment, 0) as latest_sentiment,
+        COALESCE(perf.total_feedback, 0) as total_feedback,
+        COALESCE(perf.avg_sat_score, 0) as avg_sat_score,
+        perf.latest_sat_score
+      FROM users u
+      LEFT JOIN LATERAL (
+        SELECT 
+          AVG(f.ai_sentiment) as avg_sentiment,
+          AVG(f.sat_score) as avg_sat_score,
+          COUNT(f.id) as total_feedback,
+          (SELECT f2.ai_sentiment FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_sentiment,
+          (SELECT f2.sat_score FROM feedback f2 WHERE f2.user_id = u.id ORDER BY f2.created_at DESC LIMIT 1) as latest_sat_score
+        FROM feedback f
+        WHERE f.user_id = u.id
+      ) perf ON true
+      WHERE ${fieldColumn} = ${filterValue} AND u.is_admin = false AND u.role = 'EMPLOYEE'
+      ORDER BY COALESCE(perf.latest_sentiment, 0) DESC
     `);
     return result.rows;
   }

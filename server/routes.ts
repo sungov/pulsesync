@@ -419,5 +419,32 @@ export async function registerRoutes(
     res.json(safeData);
   });
 
+  app.get("/api/analytics/employee-performance", isAuthenticated, async (req, res) => {
+    const dept = req.query.dept as string | undefined;
+    const project = req.query.project as string | undefined;
+    if (!dept && !project) {
+      return res.status(400).json({ message: "dept or project query parameter required" });
+    }
+    const filterField = project ? "project_code" : "dept_code";
+    const filterValue = (project || dept) as string;
+    const data = await storage.getEmployeePerformanceSummary(filterField, filterValue);
+    const safeData = data.map((d: any) => ({
+      id: d.id,
+      firstName: d.first_name,
+      lastName: d.last_name,
+      email: d.email,
+      role: d.role,
+      deptCode: d.dept_code,
+      projectCode: d.project_code,
+      managerEmail: d.manager_email,
+      avgSentiment: Number(d.avg_sentiment) || 0,
+      latestSentiment: Number(d.latest_sentiment) || 0,
+      totalFeedback: Number(d.total_feedback) || 0,
+      avgSatScore: Number(d.avg_sat_score) || 0,
+      latestSatScore: d.latest_sat_score != null ? Number(d.latest_sat_score) : null,
+    }));
+    res.json(safeData);
+  });
+
   return httpServer;
 }

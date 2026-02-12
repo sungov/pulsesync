@@ -16,6 +16,25 @@ import { format } from "date-fns";
 
 const currentPeriod = format(new Date(), "MMM-yyyy");
 
+function getManagerName(email: string, usersData: any[]) {
+  const mgr = usersData.find((u: any) => u.email === email);
+  if (mgr && mgr.firstName && mgr.lastName) return `${mgr.firstName} ${mgr.lastName}`;
+  if (mgr && mgr.firstName) return mgr.firstName;
+  return email?.split("@")[0] || "Unknown";
+}
+
+function getManagerInitials(email: string, usersData: any[]) {
+  const mgr = usersData.find((u: any) => u.email === email);
+  if (mgr && mgr.firstName && mgr.lastName) return `${mgr.firstName[0]}${mgr.lastName[0]}`;
+  return email?.charAt(0)?.toUpperCase() || "?";
+}
+
+function getSentimentColor(score: number) {
+  if (score >= 7) return "text-green-600 dark:text-green-400";
+  if (score >= 5) return "text-orange-500 dark:text-orange-400";
+  return "text-destructive";
+}
+
 export default function SeniorMgmtOverview() {
   const { user } = useAuth();
   const { data: deptData, isLoading: deptLoading } = useDepartmentAnalytics();
@@ -27,23 +46,23 @@ export default function SeniorMgmtOverview() {
 
   const isLoading = deptLoading || leaderLoading || burnoutLoading || reporteesLoading || actionsLoading || usersLoading;
 
+  const allUsersArr = (allUsers as any[]) || [];
+
   const totalEmployees = useMemo(() =>
-    allUsers?.filter((u: any) => u.role === "EMPLOYEE").length ?? 0, [allUsers]);
+    allUsersArr.filter((u: any) => u.role === "EMPLOYEE").length, [allUsersArr]);
 
   const totalManagers = useMemo(() =>
-    allUsers?.filter((u: any) => u.role === "MANAGER").length ?? 0, [allUsers]);
+    allUsersArr.filter((u: any) => u.role === "MANAGER").length, [allUsersArr]);
 
   const totalDepts = useMemo(() => {
-    if (!allUsers) return 0;
-    const depts = new Set((allUsers as any[]).map((u: any) => u.deptCode).filter(Boolean));
+    const depts = new Set(allUsersArr.map((u: any) => u.deptCode).filter(Boolean));
     return depts.size;
-  }, [allUsers]);
+  }, [allUsersArr]);
 
   const totalProjects = useMemo(() => {
-    if (!allUsers) return 0;
-    const projects = new Set((allUsers as any[]).map((u: any) => u.projectCode).filter(Boolean));
+    const projects = new Set(allUsersArr.map((u: any) => u.projectCode).filter(Boolean));
     return projects.size;
-  }, [allUsers]);
+  }, [allUsersArr]);
 
   const orgAvgSat = useMemo(() => {
     if (!deptData || deptData.length === 0) return "—";
@@ -67,13 +86,6 @@ export default function SeniorMgmtOverview() {
       blocked: myItems.filter((a: any) => a.status === "Blocked").length,
     };
   }, [allActionItems, user?.email]);
-
-  const deptsNeedingHelp = useMemo(() => {
-    if (!deptData) return [];
-    return deptData
-      .filter((d: any) => d.avgSatScore < 5)
-      .sort((a: any, b: any) => (a.avgSatScore || 0) - (b.avgSatScore || 0));
-  }, [deptData]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -183,22 +195,38 @@ export default function SeniorMgmtOverview() {
               <p className="text-sm text-muted-foreground text-center py-4">No department data available.</p>
             ) : (
               <div className="space-y-3">
-                {deptData.slice(0, 6).map((dept: any, idx: number) => (
-                  <div key={dept.deptCode || idx} className="flex items-center justify-between gap-2" data-testid={`row-dept-health-${dept.deptCode}`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm font-medium truncate">{dept.deptCode || "General"}</span>
+                {deptData.slice(0, 6).map((dept: any, idx: number) => {
+                  const score = typeof dept.avgSatScore === "number" ? dept.avgSatScore : 0;
+                  const pct = Math.min(score * 10, 100);
+                  return (
+                    <div key={dept.deptCode || idx} className="space-y-1" data-testid={`row-dept-health-${dept.deptCode}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium truncate">{dept.deptCode || "General"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-sm font-semibold ${getSentimentColor(score)}`}>
+                            {score.toFixed(1)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">/10</span>
+                          {score < 5 && (
+                            <Badge variant="destructive" className="text-xs">
+                              <TrendingDown className="w-3 h-3 mr-1" /> Low
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${score >= 7 ? "bg-green-500" : score >= 5 ? "bg-orange-400" : "bg-destructive"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{dept.totalFeedback} feedback{dept.totalFeedback !== 1 ? "s" : ""} submitted</p>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm font-semibold">{typeof dept.avgSatScore === "number" ? dept.avgSatScore.toFixed(1) : "—"}</span>
-                      {dept.avgSatScore < 5 && (
-                        <Badge variant="destructive" className="text-xs">
-                          <TrendingDown className="w-3 h-3 mr-1" /> Low
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -232,9 +260,12 @@ export default function SeniorMgmtOverview() {
                   <div key={leader.managerEmail || idx} className="flex items-center justify-between gap-2" data-testid={`row-manager-risk-${idx}`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <Avatar className="w-7 h-7">
-                        <AvatarFallback className="text-xs">{leader.managerEmail?.charAt(0)?.toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="text-xs">{getManagerInitials(leader.managerEmail, allUsersArr)}</AvatarFallback>
                       </Avatar>
-                      <span className="text-sm truncate">{leader.managerEmail?.split("@")[0]}</span>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium truncate block">{getManagerName(leader.managerEmail, allUsersArr)}</span>
+                        <span className="text-xs text-muted-foreground truncate block">{leader.managerEmail}</span>
+                      </div>
                     </div>
                     <Badge variant="destructive" className="text-xs shrink-0">
                       {leader.overdueCount} overdue
@@ -310,7 +341,10 @@ export default function SeniorMgmtOverview() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{risk.fullName}</p>
-                    <p className="text-xs text-muted-foreground">{risk.department} {risk.managerEmail ? `/ ${risk.managerEmail.split("@")[0]}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {risk.department}
+                      {risk.managerEmail ? ` / ${getManagerName(risk.managerEmail, allUsersArr)}` : ""}
+                    </p>
                   </div>
                   <Badge variant="destructive" className="text-xs shrink-0">
                     {risk.dropPercentage}% drop

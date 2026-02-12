@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { useDepartmentAnalytics, useLeaderAccountability, useUsersList, useProjectAnalytics, useBurnoutRadar } from "@/hooks/use-pulse-data";
+import { useDepartmentAnalytics, useLeaderAccountability, useUsersList, useProjectAnalytics, useBurnoutRadar, useEmployeePerformance } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { format, subMonths } from "date-fns";
-import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame } from "lucide-react";
+import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame, TrendingUp, TrendingDown, Award, ArrowUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function generatePeriodOptions() {
@@ -27,15 +27,221 @@ function getHealthStatus(overdueCount: number) {
   return { label: "Critical", variant: "destructive" as const, className: "" };
 }
 
-const CHART_COLORS = ["#4f46e5", "#818cf8", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+function getSentimentColor(score: number) {
+  if (score >= 7) return "text-green-600 dark:text-green-400";
+  if (score >= 5) return "text-orange-500 dark:text-orange-400";
+  return "text-destructive";
+}
+
+function getSentimentLabel(score: number) {
+  if (score >= 8) return "Excellent";
+  if (score >= 6) return "Good";
+  if (score >= 4) return "Fair";
+  if (score > 0) return "Low";
+  return "No Data";
+}
+
+function getManagerName(email: string, usersData: any[]) {
+  const mgr = usersData.find((u: any) => u.email === email);
+  if (mgr && mgr.firstName && mgr.lastName) return `${mgr.firstName} ${mgr.lastName}`;
+  if (mgr && mgr.firstName) return mgr.firstName;
+  return email?.split("@")[0] || "Unknown";
+}
+
+function getManagerInitials(email: string, usersData: any[]) {
+  const mgr = usersData.find((u: any) => u.email === email);
+  if (mgr && mgr.firstName && mgr.lastName) return `${mgr.firstName[0]}${mgr.lastName[0]}`;
+  return email?.charAt(0)?.toUpperCase() || "?";
+}
 
 type ViewTab = "departments" | "projects" | "managers";
+type DrilldownType = "dept" | "project";
+
+function EmployeePerformanceTable({ data, usersData, drilldownLabel, drilldownType }: { data: any[]; usersData: any[]; drilldownLabel: string; drilldownType: DrilldownType }) {
+  const [sortBy, setSortBy] = useState<"sentiment" | "satisfaction" | "name">("sentiment");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const sorted = useMemo(() => {
+    const arr = [...data];
+    arr.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "sentiment") cmp = (a.latestSentiment || 0) - (b.latestSentiment || 0);
+      else if (sortBy === "satisfaction") cmp = (a.avgSatScore || 0) - (b.avgSatScore || 0);
+      else cmp = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+    return arr;
+  }, [data, sortBy, sortDir]);
+
+  const toggleSort = (field: "sentiment" | "satisfaction" | "name") => {
+    if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(field); setSortDir("desc"); }
+  };
+
+  const topPerformer = sorted.length > 0 && sorted[0].latestSentiment > 0 ? sorted[0] : null;
+  const bottomPerformer = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+  const withSentiment = data.filter(e => e.latestSentiment > 0);
+  const avgSentiment = withSentiment.length > 0
+    ? withSentiment.reduce((s, e) => s + e.latestSentiment, 0) / withSentiment.length
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card data-testid="card-drill-avg-sentiment">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Avg Sentiment</p>
+            <p className={`text-2xl font-bold ${getSentimentColor(avgSentiment)}`}>
+              {avgSentiment > 0 ? avgSentiment.toFixed(1) : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground">{getSentimentLabel(avgSentiment)}</p>
+          </CardContent>
+        </Card>
+        {topPerformer && (
+          <Card data-testid="card-drill-top-performer">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Award className="w-4 h-4 text-green-500" />
+                <p className="text-xs text-muted-foreground">Top Performer</p>
+              </div>
+              <p className="font-semibold text-sm truncate">{topPerformer.firstName} {topPerformer.lastName}</p>
+              <p className={`text-lg font-bold ${getSentimentColor(topPerformer.latestSentiment)}`}>{topPerformer.latestSentiment.toFixed(1)}</p>
+            </CardContent>
+          </Card>
+        )}
+        {bottomPerformer && bottomPerformer.latestSentiment > 0 && (
+          <Card data-testid="card-drill-needs-attention">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="w-4 h-4 text-orange-500" />
+                <p className="text-xs text-muted-foreground">Needs Attention</p>
+              </div>
+              <p className="font-semibold text-sm truncate">{bottomPerformer.firstName} {bottomPerformer.lastName}</p>
+              <p className={`text-lg font-bold ${getSentimentColor(bottomPerformer.latestSentiment)}`}>{bottomPerformer.latestSentiment.toFixed(1)}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {sorted.filter(e => e.latestSentiment > 0).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Sentiment Comparison</CardTitle>
+            <CardDescription>Employee sentiment scores in {drilldownLabel}</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={sorted.filter(e => e.latestSentiment > 0).map(e => ({
+                name: `${e.firstName} ${e.lastName?.[0] || ""}`,
+                sentiment: e.latestSentiment,
+                satisfaction: e.avgSatScore,
+              }))} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <XAxis dataKey="name" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
+                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Bar dataKey="sentiment" name="Sentiment" radius={[4, 4, 0, 0]}>
+                  {sorted.filter(e => e.latestSentiment > 0).map((e, i) => (
+                    <Cell key={i} fill={e.latestSentiment >= 7 ? "#10b981" : e.latestSentiment >= 5 ? "#f59e0b" : "#ef4444"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="pt-6">
+          <Table data-testid="table-employee-performance">
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <button onClick={() => toggleSort("name")} className="flex items-center gap-1 text-left cursor-pointer" data-testid="sort-name">
+                    Employee <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">{drilldownType === "dept" ? "Project" : "Department"}</TableHead>
+                <TableHead className="text-center">Manager</TableHead>
+                <TableHead className="text-center">
+                  <button onClick={() => toggleSort("sentiment")} className="flex items-center gap-1 mx-auto cursor-pointer" data-testid="sort-sentiment">
+                    Sentiment <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button onClick={() => toggleSort("satisfaction")} className="flex items-center gap-1 mx-auto cursor-pointer" data-testid="sort-satisfaction">
+                    Satisfaction <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">Feedbacks</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((emp: any, idx: number) => (
+                <TableRow key={emp.id || idx} data-testid={`row-emp-perf-${emp.id || idx}`}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Avatar className="w-7 h-7">
+                        <AvatarFallback className="text-xs">
+                          {(emp.firstName?.[0] || "")}{(emp.lastName?.[0] || "")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{emp.firstName} {emp.lastName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {drilldownType === "dept" ? (emp.projectCode || "—") : (emp.deptCode || "—")}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {emp.managerEmail ? getManagerName(emp.managerEmail, usersData) : "—"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-semibold ${getSentimentColor(emp.latestSentiment)}`}>
+                      {emp.latestSentiment > 0 ? emp.latestSentiment.toFixed(1) : "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-medium ${getSentimentColor(emp.avgSatScore)}`}>
+                      {emp.avgSatScore > 0 ? emp.avgSatScore.toFixed(1) : "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">{emp.totalFeedback}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge
+                      variant={emp.latestSentiment >= 7 ? "default" : emp.latestSentiment >= 5 ? "secondary" : emp.latestSentiment > 0 ? "destructive" : "outline"}
+                      className={`text-xs ${emp.latestSentiment >= 7 ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}`}
+                    >
+                      {getSentimentLabel(emp.latestSentiment)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Link href={`/employee-progress/${emp.id}`}>
+                      <Button variant="ghost" size="icon" data-testid={`link-emp-progress-${emp.id}`}>
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function ExecutiveDashboard() {
   const { toast } = useToast();
   const periodOptions = useMemo(() => generatePeriodOptions(), []);
   const [period, setPeriod] = useState(periodOptions[0]);
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>("departments");
 
   const { data: deptData, isLoading: deptLoading } = useDepartmentAnalytics(period);
@@ -43,6 +249,10 @@ export default function ExecutiveDashboard() {
   const { data: usersData, isLoading: usersLoading } = useUsersList();
   const { data: projectData, isLoading: projectLoading } = useProjectAnalytics(period);
   const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
+  const { data: deptEmployees, isLoading: deptEmpLoading } = useEmployeePerformance(selectedDept || undefined);
+  const { data: projEmployees, isLoading: projEmpLoading } = useEmployeePerformance(undefined, selectedProject || undefined);
+
+  const allUsersArr = (usersData as any[]) || [];
 
   const handleNudge = () => {
     toast({
@@ -80,31 +290,27 @@ export default function ExecutiveDashboard() {
   const managerPerformance = useMemo(() => {
     if (!leaderData || !usersData) return [];
     return sortedLeaderData.map((leader: any) => {
-      const reportees = (usersData as any[]).filter((u: any) => u.managerEmail === leader.managerEmail);
+      const reportees = allUsersArr.filter((u: any) => u.managerEmail === leader.managerEmail);
       return {
         ...leader,
+        managerName: getManagerName(leader.managerEmail, allUsersArr),
+        managerInitials: getManagerInitials(leader.managerEmail, allUsersArr),
         reporteeCount: reportees.length,
-        completionRate: leader.totalTasks > 0 
+        completionRate: leader.totalTasks > 0
           ? Math.round(((leader.totalTasks - leader.pendingCount) / leader.totalTasks) * 100)
           : 0,
       };
     });
-  }, [sortedLeaderData, usersData]);
-
-  const deptEmployees = useMemo(() => {
-    if (!selectedDept || !usersData) return [];
-    return (usersData as any[]).filter((u: any) => u.deptCode === selectedDept);
-  }, [selectedDept, usersData]);
+  }, [sortedLeaderData, usersData, allUsersArr]);
 
   const orgSummary = useMemo(() => {
-    const allUsersArr = (usersData as any[]) || [];
     const employees = allUsersArr.filter((u: any) => u.role === "EMPLOYEE").length;
     const managers = allUsersArr.filter((u: any) => u.role === "MANAGER").length;
     const depts = new Set(allUsersArr.map((u: any) => u.deptCode).filter(Boolean)).size;
     const projects = new Set(allUsersArr.map((u: any) => u.projectCode).filter(Boolean)).size;
     const burnoutCount = burnoutData?.length ?? 0;
     return { employees, managers, depts, projects, burnoutCount };
-  }, [usersData, burnoutData]);
+  }, [usersData, burnoutData, allUsersArr]);
 
   if (selectedDept) {
     return (
@@ -114,44 +320,47 @@ export default function ExecutiveDashboard() {
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Overview
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground" data-testid="text-dept-name">{selectedDept} Department</h1>
-            <p className="text-muted-foreground text-sm">Employee breakdown</p>
+            <h1 className="text-2xl font-bold text-foreground" data-testid="text-dept-name">
+              <Building2 className="w-5 h-5 inline mr-2 text-primary" />
+              {selectedDept} Department
+            </h1>
+            <p className="text-muted-foreground text-sm">Employee performance comparison</p>
           </div>
         </div>
 
-        {usersLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i}><CardContent className="p-4 space-y-3"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardContent></Card>
-            ))}
-          </div>
-        ) : deptEmployees.length === 0 ? (
+        {deptEmpLoading ? (
+          <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : !deptEmployees || deptEmployees.length === 0 ? (
           <Card><CardContent className="p-8 text-center"><Users className="w-10 h-10 mx-auto text-muted-foreground mb-3" /><p className="text-muted-foreground">No employees found in this department.</p></CardContent></Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {deptEmployees.map((emp: any, idx: number) => (
-              <Card key={emp.id || idx} data-testid={`card-employee-${emp.id || idx}`}>
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <h3 className="font-semibold text-foreground" data-testid={`text-employee-name-${emp.id || idx}`}>
-                      {emp.firstName && emp.lastName ? `${emp.firstName} ${emp.lastName}` : emp.email || "Unknown"}
-                    </h3>
-                    <Badge variant="secondary" className="text-xs">{emp.role || "Employee"}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{emp.email}</p>
-                  {emp.projectCode && <p className="text-xs text-muted-foreground">Project: {emp.projectCode}</p>}
-                  <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                    <span className="text-xs text-muted-foreground">{emp.managerEmail ? `Mgr: ${emp.managerEmail.split("@")[0]}` : "No manager"}</span>
-                    <Link href={`/employee-progress/${emp.id}`}>
-                      <Button variant="ghost" size="sm" data-testid={`link-view-progress-${emp.id || idx}`}>
-                        <Eye className="w-3 h-3 mr-1" /> View
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <EmployeePerformanceTable data={deptEmployees} usersData={allUsersArr} drilldownLabel={selectedDept} drilldownType="dept" />
+        )}
+      </div>
+    );
+  }
+
+  if (selectedProject) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500" data-testid="project-drilldown-view">
+        <div className="flex flex-row items-center gap-4 flex-wrap">
+          <Button variant="outline" onClick={() => setSelectedProject(null)} data-testid="button-back-overview-project">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Overview
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground" data-testid="text-project-name">
+              <FolderKanban className="w-5 h-5 inline mr-2 text-primary" />
+              {selectedProject} Project
+            </h1>
+            <p className="text-muted-foreground text-sm">Employee performance comparison</p>
           </div>
+        </div>
+
+        {projEmpLoading ? (
+          <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : !projEmployees || projEmployees.length === 0 ? (
+          <Card><CardContent className="p-8 text-center"><Users className="w-10 h-10 mx-auto text-muted-foreground mb-3" /><p className="text-muted-foreground">No employees found in this project.</p></CardContent></Card>
+        ) : (
+          <EmployeePerformanceTable data={projEmployees} usersData={allUsersArr} drilldownLabel={selectedProject} drilldownType="project" />
         )}
       </div>
     );
@@ -242,6 +451,7 @@ export default function ExecutiveDashboard() {
           <section data-testid="section-department-cards">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <Building2 className="w-5 h-5" /> Department Overview
+              <span className="text-sm font-normal text-muted-foreground ml-2">Click a department to drill down</span>
             </h2>
             {deptLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -262,7 +472,7 @@ export default function ExecutiveDashboard() {
                   >
                     <CardContent className="p-5">
                       <p className="text-sm font-medium text-muted-foreground mb-2">{dept.deptCode || "General"}</p>
-                      <p className="text-3xl font-bold text-foreground" data-testid={`text-dept-score-${dept.deptCode || idx}`}>
+                      <p className={`text-3xl font-bold ${getSentimentColor(dept.avgSatScore)}`} data-testid={`text-dept-score-${dept.deptCode || idx}`}>
                         {typeof dept.avgSatScore === "number" ? dept.avgSatScore.toFixed(1) : "—"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">Avg. Satisfaction</p>
@@ -311,6 +521,7 @@ export default function ExecutiveDashboard() {
         <section data-testid="section-project-analytics">
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <FolderKanban className="w-5 h-5" /> Project Analytics
+            <span className="text-sm font-normal text-muted-foreground ml-2">Click a project to drill down</span>
           </h2>
           {projectLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -324,10 +535,15 @@ export default function ExecutiveDashboard() {
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {projectData.map((proj: any, idx: number) => (
-                  <Card key={proj.projectCode || idx} data-testid={`card-project-${proj.projectCode || idx}`}>
+                  <Card
+                    key={proj.projectCode || idx}
+                    className="cursor-pointer hover-elevate transition-colors"
+                    onClick={() => setSelectedProject(proj.projectCode)}
+                    data-testid={`card-project-${proj.projectCode || idx}`}
+                  >
                     <CardContent className="p-5">
                       <p className="text-sm font-medium text-muted-foreground mb-2">{proj.projectCode}</p>
-                      <p className={`text-3xl font-bold ${proj.avgSatScore < 5 ? "text-destructive" : "text-foreground"}`}>
+                      <p className={`text-3xl font-bold ${getSentimentColor(proj.avgSatScore)}`}>
                         {typeof proj.avgSatScore === "number" ? proj.avgSatScore.toFixed(1) : "—"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">Avg. Satisfaction</p>
@@ -398,11 +614,14 @@ export default function ExecutiveDashboard() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Avatar className="w-7 h-7">
-                                <AvatarFallback className="text-xs">{leader.managerEmail?.charAt(0)?.toUpperCase()}</AvatarFallback>
+                                <AvatarFallback className="text-xs">{leader.managerInitials}</AvatarFallback>
                               </Avatar>
-                              <span className="font-medium truncate max-w-[200px]" data-testid={`text-mgr-email-${idx}`}>
-                                {leader.managerEmail}
-                              </span>
+                              <div className="min-w-0">
+                                <span className="font-medium truncate block" data-testid={`text-mgr-name-${idx}`}>
+                                  {leader.managerName}
+                                </span>
+                                <span className="text-xs text-muted-foreground truncate block">{leader.managerEmail}</span>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-center">{leader.reporteeCount}</TableCell>
@@ -450,7 +669,10 @@ export default function ExecutiveDashboard() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{risk.fullName}</p>
-                      <p className="text-xs text-muted-foreground">{risk.department || "—"} {risk.managerEmail ? `/ ${risk.managerEmail.split("@")[0]}` : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {risk.department || "—"}
+                        {risk.managerEmail ? ` / ${getManagerName(risk.managerEmail, allUsersArr)}` : ""}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant={risk.riskLevel === "High" ? "destructive" : "secondary"} className="text-xs">

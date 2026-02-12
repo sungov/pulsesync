@@ -269,6 +269,24 @@ export function useProjectAnalytics(period?: string) {
   });
 }
 
+export function useEmployeePerformance(dept?: string, project?: string) {
+  const params = new URLSearchParams();
+  if (dept) params.append("dept", dept);
+  if (project) params.append("project", project);
+  const queryString = params.toString() ? `?${params.toString()}` : "";
+  const enabled = !!(dept || project);
+
+  return useQuery({
+    queryKey: ["/api/analytics/employee-performance", dept, project],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/employee-performance${queryString}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch employee performance");
+      return res.json();
+    },
+    enabled,
+  });
+}
+
 // === USERS HOOKS ===
 
 export function useUsersList(role?: string, managerEmail?: string) {
