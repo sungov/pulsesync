@@ -35,6 +35,7 @@ export async function registerRoutes(
     lastName: z.string().optional(),
     role: z.enum(["EMPLOYEE", "MANAGER", "SENIOR_MGMT"]).default("EMPLOYEE"),
     deptCode: z.string().optional(),
+    projectCode: z.string().optional(),
     managerEmail: z.string().email().optional(),
   });
 
@@ -53,6 +54,7 @@ export async function registerRoutes(
         lastName: parsed.lastName || null,
         role: parsed.role,
         deptCode: parsed.deptCode || null,
+        projectCode: parsed.projectCode || null,
         managerEmail: parsed.managerEmail || null,
         isApproved: true,
         isAdmin: false,
@@ -261,7 +263,9 @@ export async function registerRoutes(
     const role = req.query.role as string;
     const managerEmail = req.query.managerEmail as string;
     let usersList = [];
-    if (role) {
+    if (role && managerEmail) {
+      usersList = await storage.getUsersByRoleAndManager(role, managerEmail);
+    } else if (role) {
       usersList = await storage.getUsersByRole(role);
     } else if (managerEmail) {
       usersList = await storage.getUsersByManager(managerEmail);
@@ -287,9 +291,15 @@ export async function registerRoutes(
   });
 
   app.get(api.analytics.burnout.path, isAuthenticated, async (req, res) => {
-    const allUsers = await storage.getAllUsers();
+    const managerEmail = req.query.managerEmail as string | undefined;
+    let targetUsers;
+    if (managerEmail) {
+      targetUsers = await storage.getUsersByManager(managerEmail);
+    } else {
+      targetUsers = await storage.getAllUsers();
+    }
     const results = [];
-    for (const user of allUsers) {
+    for (const user of targetUsers) {
       const feedbacks = await storage.getFeedbackByUser(user.id);
       if (feedbacks.length >= 2) {
         const current = feedbacks[0];
@@ -304,9 +314,11 @@ export async function registerRoutes(
         if (dropPercentage > 0.3) riskLevel = "High";
         else if (dropPercentage > 0.15) riskLevel = "Medium";
         if (riskLevel !== "Low") {
-             results.push({
+          results.push({
             userId: user.id,
             fullName: `${user.firstName} ${user.lastName}`,
+            department: user.deptCode || "N/A",
+            managerEmail: user.managerEmail || "N/A",
             currentSentiment: currentScore,
             previousSentiment: prevScore,
             dropPercentage: Math.round(dropPercentage * 100),
@@ -322,7 +334,7 @@ export async function registerRoutes(
     const period = req.query.period as string | undefined;
     const stats = await storage.getDepartmentStatsWithPeriod(period);
     const safeStats = stats.map(s => ({
-      deptCode: s.dept_code,
+      deptCode: s.dept_code || "General",
       avgSatScore: Number(s.avg_sat_score),
       totalFeedback: Number(s.total_feedback)
     }));
@@ -346,6 +358,18 @@ export async function registerRoutes(
       totalTasks: Number(d.totalTasks),
       pendingCount: Number(d.pendingCount),
       overdueCount: Number(d.overdueCount),
+    }));
+    res.json(safeData);
+  });
+
+  app.get(api.analytics.projectAnalytics.path, isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    const data = await storage.getProjectAnalytics(period);
+    const safeData = data.map((d: any) => ({
+      projectCode: d.project_code,
+      employeeCount: Number(d.employee_count),
+      avgSatScore: Number(d.avg_sat_score),
+      totalFeedback: Number(d.total_feedback),
     }));
     res.json(safeData);
   });

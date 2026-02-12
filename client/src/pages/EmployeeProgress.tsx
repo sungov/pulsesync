@@ -77,7 +77,7 @@ function FeedbackHistoryItem({ fb }: { fb: Feedback }) {
               <CardDescription>
                 {fb.createdAt ? format(new Date(fb.createdAt), "MMM d, yyyy") : ""}
                 {fb.aiSentiment !== null && fb.aiSentiment !== undefined && (
-                  <span className="ml-3">AI Sentiment: {Math.round(fb.aiSentiment * 100)}%</span>
+                  <span className="ml-3">Positivity: {Math.round(fb.aiSentiment * 100)}%</span>
                 )}
               </CardDescription>
             </div>
@@ -329,7 +329,7 @@ export default function EmployeeProgress() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Brain className="w-4 h-4 text-primary" />
-                  AI Performance Pulse
+                  Feedback Insights
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -340,7 +340,7 @@ export default function EmployeeProgress() {
                         ? `${Math.round(latest.aiSentiment * 100)}%`
                         : "N/A"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">AI Sentiment</p>
+                    <p className="text-xs text-muted-foreground mt-1">Overall Positivity</p>
                   </div>
                   <div className="text-center">
                     <p className="text-3xl font-bold text-foreground" data-testid="text-submission-count">
@@ -351,7 +351,7 @@ export default function EmployeeProgress() {
                 </div>
                 {latest?.aiSummary && (
                   <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Latest AI Summary</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Latest Summary</p>
                     <p className="text-sm text-foreground" data-testid="text-ai-summary">{latest.aiSummary}</p>
                   </div>
                 )}

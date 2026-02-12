@@ -19,6 +19,7 @@ type AdminUser = {
   lastName: string | null;
   role: string;
   deptCode: string | null;
+  projectCode: string | null;
   managerEmail: string | null;
   isApproved: boolean;
   isAdmin: boolean;
@@ -37,6 +38,7 @@ export default function AdminPanel() {
   const [newRole, setNewRole] = useState("EMPLOYEE");
   const [newDeptCode, setNewDeptCode] = useState("");
   const [newManagerEmail, setNewManagerEmail] = useState("");
+  const [newProjectCode, setNewProjectCode] = useState("");
 
   const { data: allUsers, isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
@@ -134,6 +136,7 @@ export default function AdminPanel() {
       setNewLastName("");
       setNewRole("EMPLOYEE");
       setNewDeptCode("");
+      setNewProjectCode("");
       setNewManagerEmail("");
       toast({ title: "User Created", description: "New user has been added and auto-approved." });
     },
@@ -207,6 +210,10 @@ export default function AdminPanel() {
                 <Input data-testid="input-admin-dept" value={newDeptCode} onChange={e => setNewDeptCode(e.target.value)} placeholder="ENG, HR, SALES..." />
               </div>
               <div className="space-y-2">
+                <Label>Project (optional)</Label>
+                <Input data-testid="input-admin-project" value={newProjectCode} onChange={e => setNewProjectCode(e.target.value)} placeholder="Project Alpha, Internal Tools..." />
+              </div>
+              <div className="space-y-2">
                 <Label>Manager Email (optional)</Label>
                 <Input data-testid="input-admin-manager-email" value={newManagerEmail} onChange={e => setNewManagerEmail(e.target.value)} placeholder="manager@company.com" />
               </div>
@@ -221,6 +228,7 @@ export default function AdminPanel() {
                   lastName: newLastName,
                   role: newRole,
                   deptCode: newDeptCode || null,
+                  projectCode: newProjectCode || null,
                   managerEmail: newManagerEmail || null,
                 })}
                 disabled={addUserMutation.isPending || !newEmail || !newPassword}
@@ -294,6 +302,7 @@ export default function AdminPanel() {
                 <tr>
                   <th className="px-6 py-4 text-left font-medium text-muted-foreground">User</th>
                   <th className="px-6 py-4 text-left font-medium text-muted-foreground">Department</th>
+                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Project</th>
                   <th className="px-6 py-4 text-left font-medium text-muted-foreground">Role</th>
                   <th className="px-6 py-4 text-left font-medium text-muted-foreground">Admin</th>
                   <th className="px-6 py-4 text-right font-medium text-muted-foreground">Actions</th>
@@ -316,6 +325,7 @@ export default function AdminPanel() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{u.deptCode || "-"}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{u.projectCode || "-"}</td>
                     <td className="px-6 py-4">
                       <Select
                         value={u.role}

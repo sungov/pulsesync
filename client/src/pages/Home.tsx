@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import EmployeeDashboard from "./EmployeeDashboard";
 import ManagerOverview from "./ManagerOverview";
-import ExecutiveDashboard from "./ExecutiveDashboard";
+import SeniorMgmtOverview from "./SeniorMgmtOverview";
 import Landing from "./Landing";
 import { Sidebar } from "@/components/Sidebar";
 import { Loader2 } from "lucide-react";
@@ -13,7 +13,7 @@ function AuthenticatedHome() {
   const DashboardComponent = {
     "EMPLOYEE": EmployeeDashboard,
     "MANAGER": ManagerOverview,
-    "SENIOR_MGMT": ExecutiveDashboard
+    "SENIOR_MGMT": SeniorMgmtOverview
   }[role as string] || EmployeeDashboard;
 
   return (

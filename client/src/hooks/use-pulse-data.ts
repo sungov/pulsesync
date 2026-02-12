@@ -205,11 +205,12 @@ export function useUpsertReview() {
 
 // === ANALYTICS HOOKS ===
 
-export function useBurnoutRadar() {
+export function useBurnoutRadar(managerEmail?: string) {
+  const queryString = managerEmail ? `?managerEmail=${encodeURIComponent(managerEmail)}` : "";
   return useQuery({
-    queryKey: [api.analytics.burnout.path],
+    queryKey: [api.analytics.burnout.path, managerEmail],
     queryFn: async () => {
-      const res = await fetch(api.analytics.burnout.path, { credentials: "include" });
+      const res = await fetch(`${api.analytics.burnout.path}${queryString}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch burnout analytics");
       return api.analytics.burnout.responses[200].parse(await res.json());
     },
@@ -252,6 +253,18 @@ export function useDepartmentAnalytics(period?: string) {
       const res = await fetch(`${api.analytics.department.path}${queryString}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch department stats");
       return api.analytics.department.responses[200].parse(await res.json());
+    },
+  });
+}
+
+export function useProjectAnalytics(period?: string) {
+  const queryString = period ? `?period=${period}` : "";
+  return useQuery({
+    queryKey: [api.analytics.projectAnalytics.path, period],
+    queryFn: async () => {
+      const res = await fetch(`${api.analytics.projectAnalytics.path}${queryString}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch project analytics");
+      return api.analytics.projectAnalytics.responses[200].parse(await res.json());
     },
   });
 }

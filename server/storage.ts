@@ -11,6 +11,7 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
   getUsersByRole(role: string): Promise<User[]>;
   getUsersByManager(managerEmail: string): Promise<User[]>;
+  getUsersByRoleAndManager(role: string, managerEmail: string): Promise<User[]>;
   getAllUsers(): Promise<User[]>;
 
   createFeedback(feedback: InsertFeedback & { aiSentiment?: number; aiSummary?: string; aiSuggestedActionItems?: string }): Promise<Feedback>;
@@ -33,6 +34,7 @@ export interface IStorage {
   getDepartmentStatsWithPeriod(period?: string): Promise<any[]>;
   getTeamFeedbackWithReview(managerEmail: string, period?: string): Promise<any[]>;
   getLeaderAccountability(): Promise<any[]>;
+  getProjectAnalytics(period?: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -66,6 +68,10 @@ export class DatabaseStorage implements IStorage {
   
   async getUsersByManager(managerEmail: string): Promise<User[]> {
     return db.select().from(users).where(eq(users.managerEmail, managerEmail));
+  }
+
+  async getUsersByRoleAndManager(role: string, managerEmail: string): Promise<User[]> {
+    return db.select().from(users).where(and(eq(users.role, role), eq(users.managerEmail, managerEmail)));
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -216,6 +222,23 @@ export class DatabaseStorage implements IStorage {
         COUNT(*) FILTER (WHERE status = 'Pending' AND due_date < NOW()) as "overdueCount"
       FROM action_items
       GROUP BY mgr_email
+    `);
+    return result.rows;
+  }
+  async getProjectAnalytics(period?: string): Promise<any[]> {
+    const periodClause = period ? sql` AND f.submission_period = ${period}` : sql``;
+    const result = await db.execute(sql`
+      SELECT 
+        u.project_code,
+        COUNT(DISTINCT u.id) as employee_count,
+        AVG(f.sat_score) as avg_sat_score,
+        COUNT(f.id) as total_feedback
+      FROM users u
+      JOIN feedback f ON u.id = f.user_id
+      WHERE u.project_code IS NOT NULL AND u.project_code != ''
+      ${periodClause}
+      GROUP BY u.project_code
+      ORDER BY avg_sat_score ASC
     `);
     return result.rows;
   }

@@ -19,7 +19,7 @@ export default function ManagerOverview() {
   const { user } = useAuth();
   const { data: teamMembers, isLoading: membersLoading } = useUsersList("EMPLOYEE", user?.email || "");
   const { data: teamFeedback, isLoading: feedbackLoading } = useTeamFeedback(user?.email || "", currentPeriod);
-  const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
+  const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar(user?.email || undefined);
   const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email ?? undefined);
 
   const isLoading = membersLoading || feedbackLoading || burnoutLoading || actionsLoading;

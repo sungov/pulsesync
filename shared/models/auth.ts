@@ -20,6 +20,7 @@ export const users = pgTable("users", {
   password: text("password"),
   role: text("role").default("EMPLOYEE").notNull(),
   deptCode: text("dept_code"),
+  projectCode: text("project_code"),
   managerEmail: text("manager_email"),
   isApproved: boolean("is_approved").default(false).notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(),

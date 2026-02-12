@@ -153,6 +153,8 @@ export const api = {
         200: z.array(z.object({
           userId: z.string(),
           fullName: z.string(),
+          department: z.string().optional(),
+          managerEmail: z.string().optional(),
           currentSentiment: z.number().nullable(),
           previousSentiment: z.number().nullable(),
           dropPercentage: z.number(),
@@ -167,7 +169,6 @@ export const api = {
         200: z.array(z.object({
           deptCode: z.string(),
           avgSatScore: z.number(),
-          avgMoodScore: z.number(),
           totalFeedback: z.number(),
         })),
       },
@@ -203,6 +204,18 @@ export const api = {
           totalTasks: z.number(),
           pendingCount: z.number(),
           overdueCount: z.number(),
+        })),
+      },
+    },
+    projectAnalytics: {
+      method: 'GET' as const,
+      path: '/api/analytics/projects' as const,
+      responses: {
+        200: z.array(z.object({
+          projectCode: z.string(),
+          employeeCount: z.number(),
+          avgSatScore: z.number(),
+          totalFeedback: z.number(),
         })),
       },
     },
