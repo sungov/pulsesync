@@ -62,7 +62,7 @@ The app has four user roles: EMPLOYEE, MANAGER, SENIOR_MGMT, plus an `isAdmin` f
 | `users` | User accounts with role, department, manager email, approval status, admin flag |
 | `sessions` | Express session storage (PostgreSQL) |
 | `feedback` | Employee periodic feedback with satisfaction scores, mood, accomplishments, blockers, and AI-generated sentiment/summary |
-| `manager_reviews` | Manager notes attached to specific feedback entries |
+| `manager_reviews` | Per-field manager comments (12 columns) attached to specific feedback entries via feedbackId |
 | `action_items` | Tasks assigned by managers to employees with due dates and status tracking |
 | `conversations` | Chat conversation metadata (for AI chat feature) |
 | `messages` | Individual chat messages within conversations |
@@ -70,9 +70,23 @@ The app has four user roles: EMPLOYEE, MANAGER, SENIOR_MGMT, plus an `isAdmin` f
 ### Data Flow
 
 1. Employee submits feedback → backend sends text to OpenAI for sentiment analysis → stores feedback with AI sentiment score and summary
-2. Manager views team dashboard → sees burnout radar (compares current vs previous sentiment scores, flags >30% drops)
-3. Senior management views executive hub → department-wide aggregated stats, manager audit data
-4. Action items track accountability with overdue highlighting (red badge for past-due pending items)
+2. Manager views team dashboard → sees burnout radar, team feedback table with period filter, starts 1-on-1 reviews
+3. Manager conducts 1-on-1 review → reviews each of 12 feedback fields side-by-side with per-field comments → saves to manager_reviews (upsert)
+4. Manager views employee progress → engagement trajectory chart, goal momentum, action items CRUD, holistic performance audit timeline
+5. Senior management views executive hub → department drill-down cards, leader accountability audit, employee breakdown by department
+6. Action items track accountability with overdue highlighting (red badge for past-due pending items), full CRUD (create, update, toggle status, delete)
+
+### Frontend Routes
+
+| Route | Page | Access |
+|-------|------|--------|
+| `/` | Home (role-based dashboard) | All authenticated |
+| `/submit-feedback` | Employee Feedback Form | EMPLOYEE |
+| `/team-radar` | Manager Dashboard (team feedback, burnout radar) | MANAGER, SENIOR_MGMT |
+| `/executive` | Executive Hub (dept analytics, leader audit) | SENIOR_MGMT |
+| `/review/:feedbackId` | Manager 1-on-1 Review (per-field commenting) | MANAGER |
+| `/employee-progress/:userId` | Employee Progress Deep-Dive | MANAGER, SENIOR_MGMT |
+| `/admin` | Admin Panel (user management) | Admin only |
 
 ### Shared Code
 

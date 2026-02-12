@@ -131,6 +131,66 @@ export function useUpdateActionItem() {
   });
 }
 
+export function useDeleteActionItem() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const url = buildUrl(api.actionItems.delete.path, { id });
+      const res = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete action item");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.actionItems.list.path] });
+      toast({ title: "Task Deleted", description: "Action item removed." });
+    },
+  });
+}
+
+// === REVIEW HOOKS ===
+
+export function useReviewByFeedback(feedbackId?: number) {
+  return useQuery({
+    queryKey: ['/api/reviews', feedbackId],
+    queryFn: async () => {
+      const url = buildUrl(api.reviews.get.path, { feedbackId: feedbackId! });
+      const res = await fetch(url, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to fetch review");
+      return res.json();
+    },
+    enabled: !!feedbackId,
+  });
+}
+
+export function useUpsertReview() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: InsertManagerReview) => {
+      const res = await fetch(api.reviews.upsert.path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to save review");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/reviews'] });
+      queryClient.invalidateQueries({ queryKey: [api.analytics.teamFeedback.path] });
+      toast({ title: "Review Saved", description: "Manager review has been saved." });
+    },
+  });
+}
+
 // === ANALYTICS HOOKS ===
 
 export function useBurnoutRadar() {
@@ -144,11 +204,40 @@ export function useBurnoutRadar() {
   });
 }
 
-export function useDepartmentAnalytics() {
+export function useTeamFeedback(managerEmail?: string, period?: string) {
+  const queryParams = new URLSearchParams();
+  if (managerEmail) queryParams.append("managerEmail", managerEmail);
+  if (period) queryParams.append("period", period);
+  const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+
   return useQuery({
-    queryKey: [api.analytics.department.path],
+    queryKey: [api.analytics.teamFeedback.path, managerEmail, period],
     queryFn: async () => {
-      const res = await fetch(api.analytics.department.path, { credentials: "include" });
+      const res = await fetch(`${api.analytics.teamFeedback.path}${queryString}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch team feedback");
+      return res.json();
+    },
+    enabled: !!managerEmail,
+  });
+}
+
+export function useLeaderAccountability() {
+  return useQuery({
+    queryKey: [api.analytics.leaderAccountability.path],
+    queryFn: async () => {
+      const res = await fetch(api.analytics.leaderAccountability.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch leader accountability");
+      return res.json();
+    },
+  });
+}
+
+export function useDepartmentAnalytics(period?: string) {
+  const queryString = period ? `?period=${period}` : "";
+  return useQuery({
+    queryKey: [api.analytics.department.path, period],
+    queryFn: async () => {
+      const res = await fetch(`${api.analytics.department.path}${queryString}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch department stats");
       return api.analytics.department.responses[200].parse(await res.json());
     },

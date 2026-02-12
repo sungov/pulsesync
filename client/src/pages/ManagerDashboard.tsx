@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useUsersList, useBurnoutRadar, useCreateActionItem } from "@/hooks/use-pulse-data";
+import { useTeamFeedback, useBurnoutRadar, useCreateActionItem, useUsersList } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,17 +9,36 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Flame, Plus, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
-import { useState } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Flame, Plus, AlertTriangle, Star, ClipboardCheck, Eye, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
+import { format, subMonths } from "date-fns";
+
+const periodOptions = Array.from({ length: 12 }, (_, i) => {
+  const d = subMonths(new Date(), i);
+  return format(d, "MMM-yyyy");
+});
+
+const moodColorMap: Record<string, string> = {
+  "Great": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  "Good": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  "Neutral": "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  "Challenged": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  "Burned Out": "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
 
 export default function ManagerDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [selectedPeriod, setSelectedPeriod] = useState(periodOptions[0]);
+
   const { data: teamMembers } = useUsersList("EMPLOYEE", user?.email || "");
+  const { data: teamFeedback, isLoading: isFeedbackLoading } = useTeamFeedback(user?.email || "", selectedPeriod);
   const { data: burnoutData } = useBurnoutRadar();
   const createActionItem = useCreateActionItem();
-  const { toast } = useToast();
-  
+
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [taskContent, setTaskContent] = useState("");
@@ -39,59 +59,249 @@ export default function ManagerDashboard() {
     setDueDate("");
   };
 
+  const avgSatScore = teamFeedback?.length
+    ? (teamFeedback.reduce((sum: number, f: any) => sum + (f.satScore || 0), 0) / teamFeedback.length).toFixed(1)
+    : "—";
+
+  const burnoutRiskCount = burnoutData?.filter((r: any) => r.dropPercentage > 30).length ?? 0;
+
+  const totalFeedback = teamFeedback?.length ?? 0;
+  const reviewedCount = teamFeedback?.filter((f: any) => f.reviewed).length ?? 0;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-wrap justify-between items-center gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Team Pulse</h1>
-          <p className="text-muted-foreground mt-2">Monitoring {teamMembers?.length || 0} team members</p>
+          <h1 className="text-3xl font-display font-bold text-foreground" data-testid="text-team-pulse-title">Team Pulse</h1>
+          <p className="text-muted-foreground mt-1" data-testid="text-team-member-count">
+            Monitoring {teamMembers?.length || 0} team members
+          </p>
         </div>
-        
-        <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="shadow-lg shadow-primary/20">
-              <Plus className="w-4 h-4 mr-2" /> Assign Action Item
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Action Item</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Assign To</Label>
-                <Select onValueChange={setSelectedEmployee}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teamMembers?.map(member => (
-                      <SelectItem key={member.id} value={member.email || ""}>
-                        {member.firstName} {member.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Task Description</Label>
-                <Input value={taskContent} onChange={e => setTaskContent(e.target.value)} placeholder="e.g. Complete compliance training" />
-              </div>
-              <div className="space-y-2">
-                <Label>Due Date</Label>
-                <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreateTask} disabled={createActionItem.isPending}>
-                {createActionItem.isPending ? "Assigning..." : "Assign Task"}
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+            <SelectTrigger className="w-[160px]" data-testid="select-period">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              {periodOptions.map((p) => (
+                <SelectItem key={p} value={p} data-testid={`select-period-option-${p}`}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-assign-action-item">
+                <Plus className="w-4 h-4 mr-2" /> Assign Action Item
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Action Item</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Assign To</Label>
+                  <Select onValueChange={setSelectedEmployee}>
+                    <SelectTrigger data-testid="select-assign-employee">
+                      <SelectValue placeholder="Select team member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teamMembers?.map(member => (
+                        <SelectItem key={member.id} value={member.email || ""} data-testid={`select-employee-option-${member.id}`}>
+                          {member.firstName} {member.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Task Description</Label>
+                  <Input
+                    value={taskContent}
+                    onChange={e => setTaskContent(e.target.value)}
+                    placeholder="e.g. Complete compliance training"
+                    data-testid="input-task-description"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Due Date</Label>
+                  <Input
+                    type="date"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    data-testid="input-due-date"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleCreateTask} disabled={createActionItem.isPending} data-testid="button-submit-action-item">
+                  {createActionItem.isPending ? "Assigning..." : "Assign Task"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
-      {/* Burnout Radar Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card data-testid="card-avg-satisfaction">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Satisfaction</CardTitle>
+            <Star className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-avg-satisfaction-value">{avgSatScore}</div>
+            <p className="text-xs text-muted-foreground">Out of 10 from team feedback</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-burnout-risk">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Burnout Risk</CardTitle>
+            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-burnout-risk-count">{burnoutRiskCount}</div>
+            <p className="text-xs text-muted-foreground">Employees with &gt;30% sentiment drop</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-reviews-completed">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Reviews Completed</CardTitle>
+            <ClipboardCheck className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-reviews-completed-value">
+              {reviewedCount} / {totalFeedback}
+            </div>
+            <p className="text-xs text-muted-foreground">Feedback entries reviewed</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-4">Team Feedback</h2>
+        <Card>
+          <CardContent className="p-0">
+            {isFeedbackLoading ? (
+              <div className="space-y-3 p-6">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))}
+              </div>
+            ) : teamFeedback && teamFeedback.length > 0 ? (
+              <Table data-testid="table-team-feedback">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Mood</TableHead>
+                    <TableHead>AI Sentiment</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Review Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {teamFeedback.map((fb: any) => {
+                    const initials = fb.fullName
+                      ?.split(" ")
+                      .map((n: string) => n[0])
+                      .join("") || "?";
+                    const sentimentPct = fb.aiSentiment != null ? Math.round(fb.aiSentiment * 100) : null;
+                    const moodClasses = moodColorMap[fb.moodScore] || moodColorMap["Neutral"];
+
+                    return (
+                      <TableRow key={fb.id} data-testid={`row-feedback-${fb.id}`}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-8 h-8">
+                              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium" data-testid={`text-employee-name-${fb.id}`}>{fb.fullName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={`no-default-hover-elevate no-default-active-elevate ${moodClasses}`} data-testid={`badge-mood-${fb.id}`}>
+                            {fb.moodScore}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {sentimentPct != null ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full bg-primary rounded-full"
+                                  style={{ width: `${sentimentPct}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground" data-testid={`text-sentiment-${fb.id}`}>{sentimentPct}%</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">N/A</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground" data-testid={`text-period-${fb.id}`}>{fb.submissionPeriod}</span>
+                        </TableCell>
+                        <TableCell>
+                          {fb.reviewed ? (
+                            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" data-testid={`badge-review-status-${fb.id}`}>
+                              Reviewed
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid={`badge-review-status-${fb.id}`}>
+                              Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {fb.reviewed ? (
+                              <Link href={`/review/${fb.id}`}>
+                                <Button variant="outline" size="sm" data-testid={`button-edit-review-${fb.id}`}>
+                                  <Pencil className="w-3 h-3 mr-1" /> Edit Review
+                                </Button>
+                              </Link>
+                            ) : (
+                              <Link href={`/review/${fb.id}`}>
+                                <Button variant="default" size="sm" data-testid={`button-start-review-${fb.id}`}>
+                                  Start 1-on-1
+                                </Button>
+                              </Link>
+                            )}
+                            <Link href={`/employee-progress/${fb.userId}`}>
+                              <Button variant="ghost" size="sm" data-testid={`button-view-progress-${fb.id}`}>
+                                <Eye className="w-3 h-3 mr-1" /> View Progress
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="py-12 text-center" data-testid="text-no-feedback">
+                <p className="text-muted-foreground">No team feedback found for {selectedPeriod}.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
       <section>
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Flame className="w-5 h-5 text-orange-500" />
@@ -99,12 +309,12 @@ export default function ManagerDashboard() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {burnoutData?.map((risk: any) => (
-            <Card key={risk.userId} className={`border-l-4 ${risk.riskLevel === 'High' ? 'border-l-destructive' : risk.riskLevel === 'Medium' ? 'border-l-orange-400' : 'border-l-green-400'} shadow-sm hover:shadow-md transition-all`}>
+            <Card key={risk.userId} data-testid={`card-burnout-${risk.userId}`}>
               <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-2 flex-wrap">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarFallback>{risk.fullName.split(' ').map((n:any) => n[0]).join('')}</AvatarFallback>
+                      <AvatarFallback>{risk.fullName.split(' ').map((n: any) => n[0]).join('')}</AvatarFallback>
                     </Avatar>
                     <div>
                       <CardTitle className="text-base">{risk.fullName}</CardTitle>
@@ -112,7 +322,7 @@ export default function ManagerDashboard() {
                     </div>
                   </div>
                   {risk.dropPercentage > 10 && (
-                    <Badge variant="destructive" className="animate-pulse">
+                    <Badge variant="destructive" className="animate-pulse" data-testid={`badge-drop-${risk.userId}`}>
                       -{risk.dropPercentage}% Drop
                     </Badge>
                   )}
@@ -120,61 +330,24 @@ export default function ManagerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4 mt-2">
-                  <div className="bg-muted/50 p-3 rounded-lg text-center">
+                  <div className="bg-muted/50 p-3 rounded-md text-center">
                     <p className="text-xs text-muted-foreground mb-1">Current Mood</p>
-                    <p className="text-2xl font-bold">{risk.currentSentiment ?? '-'}</p>
+                    <p className="text-2xl font-bold">{risk.currentSentiment ?? '—'}</p>
                   </div>
-                  <div className="bg-muted/50 p-3 rounded-lg text-center">
+                  <div className="bg-muted/50 p-3 rounded-md text-center">
                     <p className="text-xs text-muted-foreground mb-1">Previous</p>
-                    <p className="text-2xl font-bold text-muted-foreground">{risk.previousSentiment ?? '-'}</p>
+                    <p className="text-2xl font-bold text-muted-foreground">{risk.previousSentiment ?? '—'}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
-          
-          {(!burnoutData || burnoutData.length === 0) && (
-             <div className="col-span-full py-12 text-center bg-muted/20 rounded-xl border border-dashed border-border">
-               <p className="text-muted-foreground">No significant burnout risks detected this period.</p>
-             </div>
-          )}
-        </div>
-      </section>
 
-      {/* Team Overview */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Team Overview</h2>
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Name</th>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Department</th>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Role</th>
-                  <th className="px-6 py-4 text-right font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {teamMembers?.map((member) => (
-                  <tr key={member.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-6 py-4 font-medium flex items-center gap-3">
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage src={member.profileImageUrl || undefined} />
-                        <AvatarFallback className="text-xs">{member.firstName?.[0]}</AvatarFallback>
-                      </Avatar>
-                      {member.firstName} {member.lastName}
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground">{(member as any).deptCode || 'Engineering'}</td>
-                    <td className="px-6 py-4"><Badge variant="outline">{(member as any).role}</Badge></td>
-                    <td className="px-6 py-4 text-right">
-                      <Button variant="ghost" size="sm">View History</Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {(!burnoutData || burnoutData.length === 0) && (
+            <div className="col-span-full py-12 text-center bg-muted/20 rounded-md border border-dashed border-border" data-testid="text-no-burnout-risks">
+              <p className="text-muted-foreground">No significant burnout risks detected this period.</p>
+            </div>
+          )}
         </div>
       </section>
     </div>

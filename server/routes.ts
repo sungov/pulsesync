@@ -70,7 +70,7 @@ export async function registerRoutes(
 
   app.patch("/api/admin/users/:id/approve", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const updated = await storage.updateUser(req.params.id, { isApproved: true });
+      const updated = await storage.updateUser(req.params.id as string, { isApproved: true });
       const { password, ...safe } = updated;
       res.json(safe);
     } catch (err) {
@@ -84,7 +84,7 @@ export async function registerRoutes(
       if (!["EMPLOYEE", "MANAGER", "SENIOR_MGMT"].includes(role)) {
         return res.status(400).json({ message: "Invalid role" });
       }
-      const updated = await storage.updateUser(req.params.id, { role });
+      const updated = await storage.updateUser(req.params.id as string, { role });
       const { password, ...safe } = updated;
       res.json(safe);
     } catch (err) {
@@ -95,7 +95,7 @@ export async function registerRoutes(
   app.patch("/api/admin/users/:id/admin", isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { isAdmin: makeAdmin } = req.body;
-      const updated = await storage.updateUser(req.params.id, { isAdmin: !!makeAdmin });
+      const updated = await storage.updateUser(req.params.id as string, { isAdmin: !!makeAdmin });
       const { password, ...safe } = updated;
       res.json(safe);
     } catch (err) {
@@ -105,7 +105,7 @@ export async function registerRoutes(
 
   app.delete("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
     try {
-      await storage.deleteUser(req.params.id);
+      await storage.deleteUser(req.params.id as string);
       res.json({ message: "User deleted" });
     } catch (err) {
       res.status(500).json({ message: "Failed to delete user" });
@@ -177,7 +177,7 @@ export async function registerRoutes(
   });
 
   app.get(api.feedback.get.path, isAuthenticated, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const fb = await storage.getFeedback(id);
     if (!fb) return res.status(404).json({ message: "Not found" });
     res.json(fb);
@@ -185,12 +185,22 @@ export async function registerRoutes(
 
   app.post(api.reviews.create.path, isAuthenticated, async (req, res) => {
     try {
-      const input = api.reviews.create.input.parse(req.body);
-      const review = await storage.createManagerReview(input);
+      const input = api.reviews.upsert.input.parse(req.body);
+      const review = await storage.upsertManagerReview(input);
       res.status(201).json(review);
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });
     }
+  });
+
+  app.get(api.reviews.get.path, isAuthenticated, async (req, res) => {
+    const feedbackId = parseInt(req.params.feedbackId as string);
+    if (isNaN(feedbackId)) {
+      return res.status(400).json({ message: "Invalid feedback ID" });
+    }
+    const review = await storage.getReviewByFeedbackId(feedbackId);
+    if (!review) return res.status(404).json({ message: "Not found" });
+    res.json(review);
   });
 
   app.post(api.actionItems.create.path, isAuthenticated, async (req, res) => {
@@ -211,11 +221,24 @@ export async function registerRoutes(
   });
 
   app.patch(api.actionItems.update.path, isAuthenticated, async (req, res) => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const updates = req.body;
     try {
       const updated = await storage.updateActionItem(id, updates);
       res.json(updated);
+    } catch (err) {
+      res.status(404).json({ message: "Not found" });
+    }
+  });
+
+  app.delete(api.actionItems.delete.path, isAuthenticated, async (req, res) => {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid ID" });
+    }
+    try {
+      await storage.deleteActionItem(id);
+      res.json({ message: "Deleted" });
     } catch (err) {
       res.status(404).json({ message: "Not found" });
     }
@@ -240,7 +263,7 @@ export async function registerRoutes(
   });
 
   app.patch(api.users.update.path, isAuthenticated, async (req, res) => {
-    const id = req.params.id;
+    const id = req.params.id as string;
     try {
       const updated = await storage.updateUser(id, req.body);
       const { password, ...safe } = updated;
@@ -283,13 +306,35 @@ export async function registerRoutes(
   });
 
   app.get(api.analytics.department.path, isAuthenticated, async (req, res) => {
-    const stats = await storage.getDepartmentStats();
+    const period = req.query.period as string | undefined;
+    const stats = await storage.getDepartmentStatsWithPeriod(period);
     const safeStats = stats.map(s => ({
       deptCode: s.dept_code,
       avgSatScore: Number(s.avg_sat_score),
       totalFeedback: Number(s.total_feedback)
     }));
     res.json(safeStats);
+  });
+
+  app.get(api.analytics.teamFeedback.path, isAuthenticated, async (req, res) => {
+    const managerEmail = req.query.managerEmail as string;
+    const period = req.query.period as string | undefined;
+    if (!managerEmail) {
+      return res.status(400).json({ message: "managerEmail is required" });
+    }
+    const data = await storage.getTeamFeedbackWithReview(managerEmail, period);
+    res.json(data);
+  });
+
+  app.get(api.analytics.leaderAccountability.path, isAuthenticated, async (req, res) => {
+    const data = await storage.getLeaderAccountability();
+    const safeData = data.map(d => ({
+      managerEmail: d.managerEmail,
+      totalTasks: Number(d.totalTasks),
+      pendingCount: Number(d.pendingCount),
+      overdueCount: Number(d.overdueCount),
+    }));
+    res.json(safeData);
   });
 
   return httpServer;

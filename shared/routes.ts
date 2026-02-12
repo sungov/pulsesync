@@ -9,7 +9,6 @@ import {
   users
 } from './schema';
 
-// Shared Error Schemas
 export const errorSchemas = {
   validation: z.object({
     message: z.string(),
@@ -23,7 +22,6 @@ export const errorSchemas = {
   }),
 };
 
-// API Contract
 export const api = {
   feedback: {
     create: {
@@ -65,6 +63,23 @@ export const api = {
         400: errorSchemas.validation,
       },
     },
+    get: {
+      method: 'GET' as const,
+      path: '/api/reviews/:feedbackId' as const,
+      responses: {
+        200: z.custom<typeof managerReviews.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    upsert: {
+      method: 'POST' as const,
+      path: '/api/reviews' as const,
+      input: insertManagerReviewSchema,
+      responses: {
+        200: z.custom<typeof managerReviews.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
   },
   actionItems: {
     create: {
@@ -93,6 +108,14 @@ export const api = {
       input: insertActionItemSchema.partial(),
       responses: {
         200: z.custom<typeof actionItems.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/action-items/:id' as const,
+      responses: {
+        200: z.object({ message: z.string() }),
         404: errorSchemas.notFound,
       },
     },
@@ -146,6 +169,40 @@ export const api = {
           avgSatScore: z.number(),
           avgMoodScore: z.number(),
           totalFeedback: z.number(),
+        })),
+      },
+    },
+    teamFeedback: {
+      method: 'GET' as const,
+      path: '/api/analytics/team-feedback' as const,
+      input: z.object({
+        managerEmail: z.string(),
+        period: z.string().optional(),
+      }),
+      responses: {
+        200: z.array(z.object({
+          id: z.number(),
+          userId: z.string(),
+          fullName: z.string(),
+          deptCode: z.string().nullable(),
+          submissionPeriod: z.string(),
+          satScore: z.number(),
+          moodScore: z.string(),
+          aiSentiment: z.number().nullable(),
+          reviewed: z.boolean(),
+          createdAt: z.string().nullable(),
+        })),
+      },
+    },
+    leaderAccountability: {
+      method: 'GET' as const,
+      path: '/api/analytics/leader-accountability' as const,
+      responses: {
+        200: z.array(z.object({
+          managerEmail: z.string(),
+          totalTasks: z.number(),
+          pendingCount: z.number(),
+          overdueCount: z.number(),
         })),
       },
     },

@@ -20,12 +20,18 @@ export interface IStorage {
 
   createManagerReview(review: InsertManagerReview): Promise<ManagerReview>;
   getReviewsByFeedbackId(feedbackId: number): Promise<ManagerReview[]>;
+  getReviewByFeedbackId(feedbackId: number): Promise<ManagerReview | undefined>;
+  upsertManagerReview(review: InsertManagerReview): Promise<ManagerReview>;
 
   createActionItem(item: InsertActionItem): Promise<ActionItem>;
   getActionItems(empEmail?: string, mgrEmail?: string): Promise<ActionItem[]>;
   updateActionItem(id: number, updates: UpdateActionItemRequest): Promise<ActionItem>;
+  deleteActionItem(id: number): Promise<void>;
   
   getDepartmentStats(): Promise<any[]>;
+  getDepartmentStatsWithPeriod(period?: string): Promise<any[]>;
+  getTeamFeedbackWithReview(managerEmail: string, period?: string): Promise<any[]>;
+  getLeaderAccountability(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -92,6 +98,24 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(managerReviews).where(eq(managerReviews.feedbackId, feedbackId));
   }
 
+  async getReviewByFeedbackId(feedbackId: number): Promise<ManagerReview | undefined> {
+    const [review] = await db.select().from(managerReviews).where(eq(managerReviews.feedbackId, feedbackId));
+    return review;
+  }
+
+  async upsertManagerReview(review: InsertManagerReview): Promise<ManagerReview> {
+    const existing = await this.getReviewByFeedbackId(review.feedbackId);
+    if (existing) {
+      const [updated] = await db.update(managerReviews)
+        .set({ ...review, lastEdited: new Date() })
+        .where(eq(managerReviews.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [newItem] = await db.insert(managerReviews).values(review).returning();
+    return newItem;
+  }
+
   async createActionItem(item: InsertActionItem): Promise<ActionItem> {
     const [newItem] = await db.insert(actionItems).values(item).returning();
     return newItem;
@@ -115,6 +139,10 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async deleteActionItem(id: number): Promise<void> {
+    await db.delete(actionItems).where(eq(actionItems.id, id));
+  }
+
   async getDepartmentStats(): Promise<any[]> {
     const result = await db.execute(sql`
       SELECT 
@@ -124,6 +152,63 @@ export class DatabaseStorage implements IStorage {
       FROM users u
       JOIN feedback f ON u.id = f.user_id
       GROUP BY u.dept_code
+    `);
+    return result.rows;
+  }
+
+  async getDepartmentStatsWithPeriod(period?: string): Promise<any[]> {
+    if (period) {
+      const result = await db.execute(sql`
+        SELECT 
+          u.dept_code,
+          AVG(f.sat_score) as avg_sat_score,
+          COUNT(f.id) as total_feedback
+        FROM users u
+        JOIN feedback f ON u.id = f.user_id
+        WHERE f.submission_period = ${period}
+        GROUP BY u.dept_code
+      `);
+      return result.rows;
+    }
+    return this.getDepartmentStats();
+  }
+
+  async getTeamFeedbackWithReview(managerEmail: string, period?: string): Promise<any[]> {
+    let periodClause = sql``;
+    if (period) {
+      periodClause = sql` AND f.submission_period = ${period}`;
+    }
+    const result = await db.execute(sql`
+      SELECT 
+        f.id,
+        f.user_id as "userId",
+        CONCAT(u.first_name, ' ', u.last_name) as "fullName",
+        u.dept_code as "deptCode",
+        f.submission_period as "submissionPeriod",
+        f.sat_score as "satScore",
+        f.mood_score as "moodScore",
+        f.ai_sentiment as "aiSentiment",
+        f.created_at as "createdAt",
+        CASE WHEN mr.id IS NOT NULL THEN true ELSE false END as "reviewed"
+      FROM users u
+      JOIN feedback f ON u.id = f.user_id
+      LEFT JOIN manager_reviews mr ON f.id = mr.feedback_id
+      WHERE u.manager_email = ${managerEmail}
+      ${periodClause}
+      ORDER BY f.created_at DESC
+    `);
+    return result.rows;
+  }
+
+  async getLeaderAccountability(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        mgr_email as "managerEmail",
+        COUNT(*) as "totalTasks",
+        COUNT(*) FILTER (WHERE status = 'Pending') as "pendingCount",
+        COUNT(*) FILTER (WHERE status = 'Pending' AND due_date < NOW()) as "overdueCount"
+      FROM action_items
+      GROUP BY mgr_email
     `);
     return result.rows;
   }

@@ -9,6 +9,8 @@ import ManagerDashboard from "@/pages/ManagerDashboard";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
 import EmployeeFeedback from "@/pages/EmployeeFeedback";
 import AdminPanel from "@/pages/AdminPanel";
+import ReviewFeedback from "@/pages/ReviewFeedback";
+import EmployeeProgress from "@/pages/EmployeeProgress";
 import { Sidebar } from "@/components/Sidebar";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +44,12 @@ function Router() {
       </Route>
       <Route path="/admin">
          <AuthenticatedLayout><AdminPanel /></AuthenticatedLayout>
+      </Route>
+      <Route path="/review/:feedbackId">
+         <AuthenticatedLayout><ReviewFeedback /></AuthenticatedLayout>
+      </Route>
+      <Route path="/employee-progress/:userId">
+         <AuthenticatedLayout><EmployeeProgress /></AuthenticatedLayout>
       </Route>
       <Route component={NotFound} />
     </Switch>

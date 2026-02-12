@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useFeedbackList, useActionItems } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -24,8 +24,79 @@ import {
   ListTodo,
   BarChart3,
   User,
+  FileText,
 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Feedback } from "@shared/schema";
+
+const MOOD_BADGE_COLORS: Record<string, string> = {
+  "Great": "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  "Good": "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+  "Neutral": "bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300",
+  "Challenged": "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+  "Burned Out": "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};
+
+function FeedbackRow({ fb }: { fb: Feedback }) {
+  const [reviewStatus, setReviewStatus] = useState<"loading" | "reviewed" | "pending">("loading");
+
+  useEffect(() => {
+    fetch(`/api/reviews/${fb.id}`, { credentials: "include" })
+      .then(r => {
+        setReviewStatus(r.ok ? "reviewed" : "pending");
+      })
+      .catch(() => setReviewStatus("pending"));
+  }, [fb.id]);
+
+  const satPct = (fb.satScore / 10) * 100;
+  const satColor = fb.satScore >= 7 ? "bg-emerald-500" : fb.satScore >= 4 ? "bg-orange-500" : "bg-red-500";
+  const moodClass = MOOD_BADGE_COLORS[fb.moodScore] || MOOD_BADGE_COLORS["Neutral"];
+  const summaryText = fb.aiSummary || "No summary available";
+  const truncatedSummary = summaryText.length > 100 ? summaryText.slice(0, 100) + "..." : summaryText;
+
+  return (
+    <TableRow data-testid={`row-submission-${fb.id}`}>
+      <TableCell className="font-medium whitespace-nowrap">{fb.submissionPeriod}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <div className="w-20 h-2 rounded-full bg-muted overflow-hidden">
+            <div className={`h-full rounded-full ${satColor}`} style={{ width: `${satPct}%` }} />
+          </div>
+          <span className="text-xs text-muted-foreground">{fb.satScore}/10</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${moodClass}`}>
+          {fb.moodScore}
+        </span>
+      </TableCell>
+      <TableCell className="max-w-[200px]">
+        <ShadTooltip>
+          <TooltipTrigger asChild>
+            <span className="text-sm text-muted-foreground cursor-default truncate block">{truncatedSummary}</span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <p className="text-sm">{summaryText}</p>
+          </TooltipContent>
+        </ShadTooltip>
+      </TableCell>
+      <TableCell>
+        {reviewStatus === "loading" ? (
+          <span className="text-xs text-muted-foreground">...</span>
+        ) : reviewStatus === "reviewed" ? (
+          <Badge variant="outline" className="border-emerald-500 text-emerald-600 dark:text-emerald-400" data-testid={`badge-review-status-${fb.id}`}>
+            Reviewed
+          </Badge>
+        ) : (
+          <Badge variant="secondary" data-testid={`badge-review-status-${fb.id}`}>
+            Pending
+          </Badge>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
 
 const MOOD_MAP: Record<string, number> = {
   "Burned Out": 1,
@@ -448,6 +519,43 @@ export default function EmployeeDashboard() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-submissions-history">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" />
+            Past Submissions History
+          </CardTitle>
+          <CardDescription>All your feedback submissions and their review status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filteredFeedback.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <FileText className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm">No submissions yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table data-testid="table-submissions-history">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Satisfaction</TableHead>
+                    <TableHead>Mood</TableHead>
+                    <TableHead>AI Summary</TableHead>
+                    <TableHead>Review Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...filteredFeedback].reverse().map((fb: Feedback) => (
+                    <FeedbackRow key={fb.id} fb={fb} />
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
