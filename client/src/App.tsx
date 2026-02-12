@@ -39,9 +39,6 @@ function Router() {
       <Route path="/executive">
          <AuthenticatedLayout><ExecutiveDashboard /></AuthenticatedLayout>
       </Route>
-      <Route path="/analytics">
-         <AuthenticatedLayout><ExecutiveDashboard /></AuthenticatedLayout>
-      </Route>
       <Route path="/admin">
          <AuthenticatedLayout><AdminPanel /></AuthenticatedLayout>
       </Route>

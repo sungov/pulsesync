@@ -3,7 +3,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { 
   LayoutDashboard, 
   Users, 
-  LineChart, 
   ListTodo, 
   LogOut, 
   BrainCircuit,
@@ -45,12 +44,6 @@ export function Sidebar() {
       href: "/executive",
       icon: BrainCircuit,
       roles: ["SENIOR_MGMT"],
-    },
-    {
-      label: "Analytics",
-      href: "/analytics",
-      icon: LineChart,
-      roles: ["MANAGER", "SENIOR_MGMT"],
     },
   ];
 

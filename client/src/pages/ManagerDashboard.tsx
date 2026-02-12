@@ -45,7 +45,7 @@ export default function ManagerDashboard() {
   const { data: teamMembers } = useUsersList("EMPLOYEE", user?.email || "");
   const { data: teamFeedback, isLoading: isFeedbackLoading } = useTeamFeedback(user?.email || "", selectedPeriod);
   const { data: burnoutData } = useBurnoutRadar();
-  const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email);
+  const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email ?? undefined);
   const createActionItem = useCreateActionItem();
   const updateActionItem = useUpdateActionItem();
   const deleteActionItem = useDeleteActionItem();

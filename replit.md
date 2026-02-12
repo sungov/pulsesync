@@ -80,9 +80,9 @@ The app has four user roles: EMPLOYEE, MANAGER, SENIOR_MGMT, plus an `isAdmin` f
 
 | Route | Page | Access |
 |-------|------|--------|
-| `/` | Home (role-based dashboard) | All authenticated |
+| `/` | Home (role-based dashboard: Employee Dashboard, Manager Overview, or Executive Hub) | All authenticated |
 | `/submit-feedback` | Employee Feedback Form | EMPLOYEE |
-| `/team-radar` | Manager Dashboard (team feedback, burnout radar) | MANAGER, SENIOR_MGMT |
+| `/team-radar` | Team Radar (detailed team feedback table, burnout radar, action items management) | MANAGER, SENIOR_MGMT |
 | `/executive` | Executive Hub (dept analytics, leader audit) | SENIOR_MGMT |
 | `/review/:feedbackId` | Manager 1-on-1 Review (per-field commenting) | MANAGER |
 | `/employee-progress/:userId` | Employee Progress Deep-Dive | MANAGER, SENIOR_MGMT |

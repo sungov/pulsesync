@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import EmployeeDashboard from "./EmployeeDashboard";
-import ManagerDashboard from "./ManagerDashboard";
+import ManagerOverview from "./ManagerOverview";
 import ExecutiveDashboard from "./ExecutiveDashboard";
 import Landing from "./Landing";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,7 +12,7 @@ function AuthenticatedHome() {
 
   const DashboardComponent = {
     "EMPLOYEE": EmployeeDashboard,
-    "MANAGER": ManagerDashboard,
+    "MANAGER": ManagerOverview,
     "SENIOR_MGMT": ExecutiveDashboard
   }[role as string] || EmployeeDashboard;
 
