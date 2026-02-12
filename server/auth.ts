@@ -2,9 +2,10 @@ import type { Express, RequestHandler } from "express";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { db } from "./db";
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users, passwordResetTokens } from "@shared/schema";
+import { eq, and, gt } from "drizzle-orm";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000;
@@ -106,6 +107,86 @@ export async function setupAuth(app: Express) {
 
     const { password: _, ...safeUser } = user;
     res.json(safeUser);
+  });
+
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.email, email));
+      if (user) {
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        await db.insert(passwordResetTokens).values({
+          email,
+          token,
+          expiresAt,
+        });
+      }
+
+      res.json({ message: "If an account exists with that email, a password reset has been initiated. Please contact your administrator for the reset link." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Something went wrong. Please try again." });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and new password are required" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const [resetToken] = await db.select().from(passwordResetTokens).where(
+        and(
+          eq(passwordResetTokens.token, token),
+          eq(passwordResetTokens.used, false),
+          gt(passwordResetTokens.expiresAt, new Date())
+        )
+      );
+
+      if (!resetToken) {
+        return res.status(400).json({ message: "Invalid or expired reset link. Please request a new one." });
+      }
+
+      const hashed = await bcrypt.hash(password, 10);
+      await db.update(users).set({ password: hashed }).where(eq(users.email, resetToken.email));
+      await db.update(passwordResetTokens).set({ used: true }).where(eq(passwordResetTokens.id, resetToken.id));
+
+      res.json({ message: "Password has been reset successfully. You can now sign in." });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "Something went wrong. Please try again." });
+    }
+  });
+
+  app.get("/api/auth/validate-reset-token", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) {
+        return res.status(400).json({ valid: false });
+      }
+
+      const [resetToken] = await db.select().from(passwordResetTokens).where(
+        and(
+          eq(passwordResetTokens.token, token),
+          eq(passwordResetTokens.used, false),
+          gt(passwordResetTokens.expiresAt, new Date())
+        )
+      );
+
+      res.json({ valid: !!resetToken });
+    } catch {
+      res.json({ valid: false });
+    }
   });
 
   app.post("/api/auth/logout", (req, res) => {

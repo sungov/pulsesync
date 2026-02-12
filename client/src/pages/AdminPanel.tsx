@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil, AlertTriangle, KeyRound, Copy, Check } from "lucide-react";
 
 type AdminUser = {
   id: string;
@@ -55,11 +55,31 @@ export default function AdminPanel() {
   const [editManagerEmail, setEditManagerEmail] = useState("");
   const [editPassword, setEditPassword] = useState("");
 
+  const [copiedResetId, setCopiedResetId] = useState<string | null>(null);
+
   const { data: allUsers, isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
     queryFn: async () => {
       const res = await fetch("/api/admin/users", { credentials: "include" });
       if (!res.ok) throw new Error("Unauthorized");
+      return res.json();
+    },
+  });
+
+  type ResetRequest = {
+    id: string;
+    email: string;
+    token: string;
+    expiresAt: string;
+    used: boolean;
+    createdAt: string;
+  };
+
+  const { data: resetRequests } = useQuery<ResetRequest[]>({
+    queryKey: ["/api/admin/password-resets"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/password-resets", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
       return res.json();
     },
   });
@@ -408,6 +428,59 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        </section>
+      )}
+
+      {resetRequests && resetRequests.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-amber-500" />
+            Pending Password Resets ({resetRequests.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {resetRequests.map(r => {
+              const reqUser = allUsers?.find(u => u.email === r.email);
+              const resetLink = `${window.location.origin}/reset-password?token=${r.token}`;
+              const isCopied = copiedResetId === r.id;
+              return (
+                <Card key={r.id} className="border-amber-200 dark:border-amber-800/50 shadow-sm">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Avatar>
+                        <AvatarFallback className="bg-amber-100 text-amber-600">
+                          {(reqUser?.firstName?.[0] || "?")}{(reqUser?.lastName?.[0] || "")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-foreground truncate" data-testid={`text-reset-name-${r.id}`}>
+                          {reqUser ? `${reqUser.firstName || ""} ${reqUser.lastName || ""}` : "Unknown User"}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">{r.email}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Expires: {new Date(r.expiresAt).toLocaleString()}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid={`button-copy-reset-${r.id}`}
+                      className="w-full"
+                      onClick={() => {
+                        navigator.clipboard.writeText(resetLink);
+                        setCopiedResetId(r.id);
+                        toast({ title: "Link Copied", description: "Password reset link copied to clipboard." });
+                        setTimeout(() => setCopiedResetId(null), 2000);
+                      }}
+                    >
+                      {isCopied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                      {isCopied ? "Copied" : "Copy Reset Link"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </section>
       )}

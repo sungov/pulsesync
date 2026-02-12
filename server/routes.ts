@@ -6,6 +6,9 @@ import { z } from "zod";
 import OpenAI from "openai";
 import { setupAuth, isAuthenticated, isAdmin } from "./auth";
 import bcrypt from "bcryptjs";
+import { db } from "./db";
+import { passwordResetTokens } from "@shared/schema";
+import { eq, and, gt } from "drizzle-orm";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -154,6 +157,20 @@ export async function registerRoutes(
       res.json({ message: "User deleted" });
     } catch (err) {
       res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.get("/api/admin/password-resets", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const pending = await db.select().from(passwordResetTokens).where(
+        and(
+          eq(passwordResetTokens.used, false),
+          gt(passwordResetTokens.expiresAt, new Date())
+        )
+      );
+      res.json(pending);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch reset requests" });
     }
   });
 
