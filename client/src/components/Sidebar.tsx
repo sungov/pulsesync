@@ -62,7 +62,7 @@ export function Sidebar() {
         </div>
 
         <nav className="space-y-1">
-          {navItems
+          {!isAdmin && navItems
             .filter(item => item.roles.includes(userRole))
             .map((item) => {
               const isActive = location === item.href;
@@ -85,21 +85,18 @@ export function Sidebar() {
             })}
 
           {isAdmin && (
-            <>
-              <div className="my-3 border-t border-border/50" />
-              <Link href={adminItem.href}>
-                <div className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group cursor-pointer",
-                  location === adminItem.href
-                    ? "bg-primary/10 text-primary shadow-sm"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )} data-testid="nav-user-management">
-                  <Shield className={cn("w-4 h-4 transition-colors", location === adminItem.href ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                  {adminItem.label}
-                  {location === adminItem.href && <ChevronRight className="w-3 h-3 ml-auto text-primary" />}
-                </div>
-              </Link>
-            </>
+            <Link href={adminItem.href}>
+              <div className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group cursor-pointer",
+                location === adminItem.href
+                  ? "bg-primary/10 text-primary shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )} data-testid="nav-user-management">
+                <Shield className={cn("w-4 h-4 transition-colors", location === adminItem.href ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                {adminItem.label}
+                {location === adminItem.href && <ChevronRight className="w-3 h-3 ml-auto text-primary" />}
+              </div>
+            </Link>
           )}
         </nav>
       </div>

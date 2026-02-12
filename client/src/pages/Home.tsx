@@ -5,10 +5,15 @@ import SeniorMgmtOverview from "./SeniorMgmtOverview";
 import Landing from "./Landing";
 import { Sidebar } from "@/components/Sidebar";
 import { Loader2 } from "lucide-react";
+import { Redirect } from "wouter";
 
 function AuthenticatedHome() {
   const { user } = useAuth();
   const role = user?.role || "EMPLOYEE";
+
+  if (user?.isAdmin) {
+    return <Redirect to="/admin" />;
+  }
 
   const DashboardComponent = {
     "EMPLOYEE": EmployeeDashboard,

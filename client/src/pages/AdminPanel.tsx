@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil, AlertTriangle, KeyRound, Copy, Check } from "lucide-react";
+import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil, AlertTriangle, KeyRound, Copy, Check, Building2, FolderKanban } from "lucide-react";
 
 type AdminUser = {
   id: string;
@@ -250,6 +250,68 @@ export default function AdminPanel() {
           <h1 className="text-3xl font-display font-bold text-foreground" data-testid="text-admin-title">User Management</h1>
           <p className="text-muted-foreground mt-2">Manage access, roles, and approvals</p>
         </div>
+      </header>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Card data-testid="card-admin-total-users">
+          <CardContent className="pt-5 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Total Users</span>
+            </div>
+            <div className="text-2xl font-bold" data-testid="text-admin-total-users">{allUsers?.length ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card data-testid="card-admin-employees">
+          <CardContent className="pt-5 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <UserCheck className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Employees</span>
+            </div>
+            <div className="text-2xl font-bold">{allUsers?.filter(u => u.role === "EMPLOYEE").length ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card data-testid="card-admin-managers">
+          <CardContent className="pt-5 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Shield className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Managers</span>
+            </div>
+            <div className="text-2xl font-bold">{allUsers?.filter(u => u.role === "MANAGER").length ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card data-testid="card-admin-sr-mgmt">
+          <CardContent className="pt-5 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Building2 className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Sr. Mgmt</span>
+            </div>
+            <div className="text-2xl font-bold">{allUsers?.filter(u => u.role === "SENIOR_MGMT").length ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card data-testid="card-admin-departments">
+          <CardContent className="pt-5 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <FolderKanban className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Departments</span>
+            </div>
+            <div className="text-2xl font-bold">{new Set((allUsers ?? []).map(u => u.deptCode).filter(Boolean)).size}</div>
+          </CardContent>
+        </Card>
+        <Card data-testid="card-admin-pending-approval">
+          <CardContent className="pt-5 pb-4 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Pending Approval</span>
+            </div>
+            <div className={`text-2xl font-bold ${(allUsers?.filter(u => !u.isApproved).length ?? 0) > 0 ? "text-orange-500" : ""}`}>
+              {allUsers?.filter(u => !u.isApproved).length ?? 0}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-col md:flex-row justify-end gap-4">
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-user" className="shadow-lg shadow-primary/20">
@@ -327,7 +389,7 @@ export default function AdminPanel() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </header>
+      </div>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
