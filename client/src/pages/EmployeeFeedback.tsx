@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { SyncLoader } from "@/components/SyncLoader";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -28,7 +28,17 @@ import {
   CheckCircle2,
   Lock,
   Pencil,
+  ChevronDown,
 } from "lucide-react";
+
+function generatePeriodOptions(): string[] {
+  const options: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    options.push(format(subMonths(now, i), "MMM-yyyy"));
+  }
+  return options;
+}
 
 const MOOD_LABELS = ["Burned Out", "Challenged", "Neutral", "Good", "Great"] as const;
 const SAT_LABELS = ["Very Dissatisfied", "Dissatisfied", "Somewhat Dissatisfied", "Slightly Dissatisfied", "Mixed", "Slightly Satisfied", "Somewhat Satisfied", "Satisfied", "Very Satisfied", "Thriving"] as const;
@@ -72,12 +82,13 @@ export default function EmployeeFeedback() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingFeedbackId, setEditingFeedbackId] = useState<number | null>(null);
 
-  const currentPeriod = format(new Date(), "MMM-yyyy");
+  const periodOptions = generatePeriodOptions();
+  const [selectedPeriod, setSelectedPeriod] = useState(periodOptions[0]);
 
   const { data: periodCheck, isLoading: periodCheckLoading } = useQuery<{ exists: boolean; feedbackId: number | null; reviewed: boolean }>({
-    queryKey: ["/api/feedback/check-period", currentPeriod],
+    queryKey: ["/api/feedback/check-period", selectedPeriod],
     queryFn: async () => {
-      const res = await fetch(`/api/feedback/check-period?period=${currentPeriod}`, { credentials: "include" });
+      const res = await fetch(`/api/feedback/check-period?period=${selectedPeriod}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to check period");
       return res.json();
     },
@@ -141,7 +152,7 @@ export default function EmployeeFeedback() {
 
     const payload = {
       userId: user.id,
-      submissionPeriod: currentPeriod,
+      submissionPeriod: selectedPeriod,
       satScore: satScore[0],
       moodScore,
       workloadLevel: workloadLevel[0],
@@ -177,6 +188,8 @@ export default function EmployeeFeedback() {
         setMoodIndex([3]);
         setWorkloadLevel([3]);
         setWorkLifeBalance([3]);
+        queryClient.invalidateQueries({ queryKey: ["/api/feedback/check-period"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/feedback"] });
       }
     });
   };
@@ -186,13 +199,33 @@ export default function EmployeeFeedback() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {createFeedback.isPending && <SyncLoader />}
 
-      <header>
+      <header className="space-y-3">
         <h1 className="text-3xl font-display font-bold text-foreground" data-testid="text-greeting">
           Hello, {user?.firstName}
         </h1>
-        <p className="text-muted-foreground mt-2">
-          Here's your pulse check for <span className="font-semibold text-primary">{currentPeriod}</span>.
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-muted-foreground">Pulse check for</p>
+          <div className="relative inline-block">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => {
+                setSelectedPeriod(e.target.value);
+                setIsEditing(false);
+                setEditingFeedbackId(null);
+              }}
+              className="appearance-none bg-card border border-border rounded-md pl-3 pr-8 py-1.5 text-sm font-semibold text-primary cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+              data-testid="select-period"
+            >
+              {periodOptions.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
+          {selectedPeriod !== periodOptions[0] && (
+            <Badge variant="secondary">Backdated</Badge>
+          )}
+        </div>
       </header>
 
       {periodCheckLoading ? (
@@ -211,7 +244,7 @@ export default function EmployeeFeedback() {
                 <Lock className="w-12 h-12 mx-auto text-emerald-500/40" />
                 <p className="text-lg font-medium text-foreground">Feedback Reviewed & Locked</p>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Your feedback for <span className="font-semibold text-primary">{currentPeriod}</span> has been reviewed by your manager and is now locked. You can view it in your dashboard.
+                  Your feedback for <span className="font-semibold text-primary">{selectedPeriod}</span> has been reviewed by your manager and is now locked. You can view it in your dashboard.
                 </p>
               </>
             ) : (
@@ -219,7 +252,7 @@ export default function EmployeeFeedback() {
                 <CheckCircle2 className="w-12 h-12 mx-auto text-primary/40" />
                 <p className="text-lg font-medium text-foreground">Already Submitted</p>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  You've already submitted your monthly pulse for <span className="font-semibold text-primary">{currentPeriod}</span>. Since your manager hasn't reviewed it yet, you can still edit your responses.
+                  You've already submitted your monthly pulse for <span className="font-semibold text-primary">{selectedPeriod}</span>. Since your manager hasn't reviewed it yet, you can still edit your responses.
                 </p>
                 <Button
                   variant="outline"
