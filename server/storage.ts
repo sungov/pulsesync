@@ -41,7 +41,7 @@ export interface IStorage {
   getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]>;
 
   createKudos(data: InsertKudos): Promise<Kudos>;
-  getRecentKudos(limit?: number): Promise<any[]>;
+  getRecentKudos(limit?: number, startDate?: Date, endDate?: Date): Promise<any[]>;
   getKudosLeaderboard(startDate: Date, endDate: Date): Promise<any[]>;
   getKudosByUser(userId: string): Promise<any[]>;
 
@@ -370,7 +370,10 @@ export class DatabaseStorage implements IStorage {
     return newItem;
   }
 
-  async getRecentKudos(limit: number = 20): Promise<any[]> {
+  async getRecentKudos(limit: number = 20, startDate?: Date, endDate?: Date): Promise<any[]> {
+    const dateFilter = startDate && endDate
+      ? sql`AND k.created_at >= ${startDate} AND k.created_at <= ${endDate}`
+      : sql``;
     const result = await db.execute(sql`
       SELECT 
         k.id,
@@ -386,6 +389,7 @@ export class DatabaseStorage implements IStorage {
       FROM kudos k
       JOIN users gr ON k.giver_user_id = gr.id
       JOIN users rc ON k.receiver_user_id = rc.id
+      WHERE 1=1 ${dateFilter}
       ORDER BY k.created_at DESC
       LIMIT ${limit}
     `);

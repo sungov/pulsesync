@@ -731,7 +731,21 @@ export async function registerRoutes(
 
   app.get("/api/kudos/recent", isAuthenticated, async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 20;
-    const data = await storage.getRecentKudos(limit);
+    const range = req.query.range as string | undefined;
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    if (range) {
+      const now = new Date();
+      endDate = now;
+      if (range === "quarter") {
+        startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+      } else if (range === "year") {
+        startDate = new Date(now.getFullYear(), 0, 1);
+      } else {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+    }
+    const data = await storage.getRecentKudos(limit, startDate, endDate);
     res.json(data);
   });
 

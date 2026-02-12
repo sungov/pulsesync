@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Heart, Award, Star, Users, Lightbulb, Zap,
   HandHeart, Trophy, Send, Eye, EyeOff, Search,
-  TrendingUp, Crown, Medal
+  Crown, Medal
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -40,6 +40,39 @@ function getValueIcon(tag: string) {
   return <Heart className="w-3.5 h-3.5 text-rose-500" />;
 }
 
+const RANK_STYLES = [
+  { bg: "linear-gradient(135deg, #f59e0b, #d97706)", icon: Crown },
+  { bg: "linear-gradient(135deg, #94a3b8, #64748b)", icon: Medal },
+  { bg: "linear-gradient(135deg, #d97706, #92400e)", icon: Medal },
+];
+
+const RANK_LABELS = ["1st", "2nd", "3rd"];
+
+interface RankedEntry {
+  userId: string;
+  fullName: string;
+  deptCode: string;
+  role: string;
+  kudosCount: number;
+  rank: number;
+}
+
+function assignRanks(entries: any[]): RankedEntry[] {
+  if (!entries || entries.length === 0) return [];
+  const sorted = [...entries].sort((a, b) => b.kudosCount - a.kudosCount);
+  const ranked: RankedEntry[] = [];
+  let currentRank = 1;
+
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i].kudosCount < sorted[i - 1].kudosCount) {
+      currentRank = i + 1;
+    }
+    if (currentRank > 3) break;
+    ranked.push({ ...sorted[i], rank: currentRank });
+  }
+  return ranked;
+}
+
 export default function KudosWall() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -52,12 +85,13 @@ export default function KudosWall() {
   const [selectedTag, setSelectedTag] = useState("Teamwork");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [leaderboardRange, setLeaderboardRange] = useState("month");
+  const [wallRange, setWallRange] = useState("month");
+  const [leaderboardRange, setLeaderboardRange] = useState("quarter");
 
   const { data: recentKudos, isLoading: kudosLoading } = useQuery<any[]>({
-    queryKey: ["/api/kudos/recent"],
+    queryKey: ["/api/kudos/recent", wallRange],
     queryFn: async () => {
-      const res = await fetch("/api/kudos/recent?limit=50", { credentials: "include" });
+      const res = await fetch(`/api/kudos/recent?limit=50&range=${wallRange}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch kudos");
       return res.json();
     },
@@ -71,6 +105,12 @@ export default function KudosWall() {
       return res.json();
     },
   });
+
+  const rankedLeaderboard = useMemo(() => {
+    if (!leaderboard) return [];
+    const withCount = leaderboard.map((d: any) => ({ ...d, kudosCount: Number(d.kudosCount) }));
+    return assignRanks(withCount);
+  }, [leaderboard]);
 
   const { data: allUsers } = useQuery<any[]>({
     queryKey: ["/api/users"],
@@ -264,7 +304,23 @@ export default function KudosWall() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="wall" className="mt-6">
+        <TabsContent value="wall" className="mt-6 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-sm text-muted-foreground">
+              {recentKudos ? `${recentKudos.length} recognition${recentKudos.length !== 1 ? "s" : ""}` : ""}
+            </p>
+            <Select value={wallRange} onValueChange={setWallRange}>
+              <SelectTrigger className="w-[140px]" data-testid="select-wall-range">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="quarter">This Quarter</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {kudosLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[1,2,3,4].map(i => (
@@ -275,7 +331,7 @@ export default function KudosWall() {
             <Card className="border-border/50">
               <CardContent className="py-12 text-center">
                 <Heart className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-lg font-medium text-foreground">No kudos yet</p>
+                <p className="text-lg font-medium text-foreground">No kudos this period</p>
                 <p className="text-sm text-muted-foreground">Be the first to recognize a colleague!</p>
               </CardContent>
             </Card>
@@ -342,7 +398,7 @@ export default function KudosWall() {
             <div className="space-y-3">
               {[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
             </div>
-          ) : !leaderboard || leaderboard.length === 0 ? (
+          ) : rankedLeaderboard.length === 0 ? (
             <Card className="border-border/50">
               <CardContent className="py-12 text-center">
                 <Trophy className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
@@ -352,37 +408,39 @@ export default function KudosWall() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {leaderboard.map((entry: any, index: number) => (
-                <Card key={entry.userId} className="border-border/50 overflow-visible" data-testid={`card-leaderboard-${index}`}>
-                  <CardContent className="p-4 flex items-center gap-4">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm" style={{
-                      background: index === 0 ? "linear-gradient(135deg, #f59e0b, #d97706)" : index === 1 ? "linear-gradient(135deg, #94a3b8, #64748b)" : index === 2 ? "linear-gradient(135deg, #d97706, #92400e)" : undefined,
-                      color: index < 3 ? "white" : undefined,
-                    }}>
-                      {index < 3 ? (
-                        index === 0 ? <Crown className="w-4 h-4" /> : <Medal className="w-4 h-4" />
-                      ) : (
-                        <span className="text-muted-foreground">{index + 1}</span>
-                      )}
-                    </div>
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback className="bg-primary/10 text-primary text-sm">{getInitials(entry.fullName)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{entry.fullName}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {entry.deptCode && <span className="text-xs text-muted-foreground">{entry.deptCode}</span>}
-                        <Badge variant="outline" className="text-xs">{entry.role?.replace("_", " ")}</Badge>
+              {rankedLeaderboard.map((entry, idx) => {
+                const rankIdx = entry.rank - 1;
+                const style = RANK_STYLES[rankIdx];
+                const RankIcon = style?.icon || Medal;
+                return (
+                  <Card key={entry.userId} className="border-border/50 overflow-visible" data-testid={`card-leaderboard-${idx}`}>
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm"
+                        style={{ background: style.bg, color: "white" }}
+                      >
+                        <RankIcon className="w-4 h-4" />
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Heart className="w-4 h-4 text-rose-500" />
-                      <span className="text-lg font-bold text-foreground" data-testid={`text-kudos-count-${index}`}>{entry.kudosCount}</span>
-                      <span className="text-xs text-muted-foreground">kudos</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      <Badge variant="outline" className="text-xs shrink-0">{RANK_LABELS[rankIdx]}</Badge>
+                      <Avatar className="h-9 w-9">
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm">{getInitials(entry.fullName)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{entry.fullName}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {entry.deptCode && <span className="text-xs text-muted-foreground">{entry.deptCode}</span>}
+                          <Badge variant="outline" className="text-xs">{entry.role?.replace("_", " ")}</Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-rose-500" />
+                        <span className="text-lg font-bold text-foreground" data-testid={`text-kudos-count-${idx}`}>{entry.kudosCount}</span>
+                        <span className="text-xs text-muted-foreground">kudos</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
