@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useDepartmentTrends, useLeaderAccountability, useBurnoutRadar, useActionItemsForUser, useUsersList } from "@/hooks/use-pulse-data";
+import { useDepartmentTrends, useLeaderAccountability, useBurnoutRadar, useActionItems, useUsersList } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Building2, Users, Flame, ArrowRight, AlertTriangle,
-  ClipboardCheck, ListTodo, CheckCircle2,
-  Clock, TrendingDown, TrendingUp, Minus,
-  FolderKanban, UserCheck, ShieldCheck
+  ClipboardCheck, CheckCircle2, BarChart3, Clock,
+  TrendingDown, TrendingUp, Minus,
+  FolderKanban, UserCheck
 } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -42,7 +42,7 @@ export default function SeniorMgmtOverview() {
   const { data: leaderData, isLoading: leaderLoading } = useLeaderAccountability();
   const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
   const { data: reportees, isLoading: reporteesLoading } = useUsersList(undefined, user?.email || "");
-  const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email ?? undefined);
+  const { data: allActionItems, isLoading: actionsLoading } = useActionItems();
   const { data: allUsers, isLoading: usersLoading } = useUsersList();
 
   const isLoading = deptLoading || leaderLoading || burnoutLoading || reporteesLoading || actionsLoading || usersLoading;
@@ -78,15 +78,23 @@ export default function SeniorMgmtOverview() {
       .sort((a: any, b: any) => (b.overdueCount ?? 0) - (a.overdueCount ?? 0));
   }, [leaderData]);
 
-  const myActionStats = useMemo(() => {
-    if (!allActionItems) return { pending: 0, overdue: 0, blocked: 0 };
-    const myItems = allActionItems.filter((a: any) => a.mgrEmail === user?.email);
+  const feedbackParticipation = useMemo(() => {
+    if (!deptData || deptData.length === 0) return { submitted: 0, total: 0, rate: "0" };
+    const submitted = deptData.reduce((sum: number, d: any) => sum + (d.totalFeedback || 0), 0);
+    const total = totalEmployees || 1;
+    return { submitted, total, rate: ((submitted / total) * 100).toFixed(0) };
+  }, [deptData, totalEmployees]);
+
+  const orgActionStats = useMemo(() => {
+    if (!allActionItems) return { total: 0, overdue: 0, completed: 0 };
+    const items = allActionItems as any[];
+    const now = new Date();
     return {
-      pending: myItems.filter((a: any) => a.status === "Pending").length,
-      overdue: myItems.filter((a: any) => a.status !== "Completed" && new Date(a.dueDate) < new Date()).length,
-      blocked: myItems.filter((a: any) => a.status === "Blocked").length,
+      total: items.length,
+      overdue: items.filter((a: any) => a.status !== "Completed" && new Date(a.dueDate) < now).length,
+      completed: items.filter((a: any) => a.status === "Completed").length,
     };
-  }, [allActionItems, user?.email]);
+  }, [allActionItems]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -102,14 +110,14 @@ export default function SeniorMgmtOverview() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card data-testid="card-sr-total-employees">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+            <CardTitle className="text-sm font-medium">Workforce</CardTitle>
             <Users className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <>
-                <div className="text-2xl font-bold">{totalEmployees}</div>
-                <p className="text-xs text-muted-foreground">{totalManagers} managers, {totalDepts} depts, {totalProjects} projects</p>
+                <div className="text-2xl font-bold">{totalEmployees + totalManagers}</div>
+                <p className="text-xs text-muted-foreground">{totalEmployees} employees, {totalManagers} managers</p>
               </>
             )}
           </CardContent>
@@ -117,58 +125,52 @@ export default function SeniorMgmtOverview() {
 
         <Card data-testid="card-sr-org-satisfaction">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Org Satisfaction</CardTitle>
+            <CardTitle className="text-sm font-medium">Org Wellness</CardTitle>
             <ClipboardCheck className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <>
-                <div className="text-2xl font-bold">{orgAvgSat}</div>
-                <p className="text-xs text-muted-foreground">Avg across all departments</p>
+                <div className={`text-2xl font-bold ${orgAvgSat !== "—" ? (Number(orgAvgSat) >= 7 ? "text-green-600 dark:text-green-400" : Number(orgAvgSat) >= 5 ? "text-orange-500 dark:text-orange-400" : "text-destructive") : ""}`}>
+                  {orgAvgSat}{orgAvgSat !== "—" && <span className="text-sm font-normal text-muted-foreground">/10</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">Avg across {totalDepts} departments</p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Link href="/burnout-alerts">
-          <Card className="cursor-pointer hover-elevate" data-testid="card-sr-burnout-alerts">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Burnout Alerts</CardTitle>
-              <Flame className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {isLoading ? <Skeleton className="h-8 w-16" /> : (
-                <>
-                  <div className={`text-2xl font-bold ${(burnoutData?.length ?? 0) > 0 ? "text-destructive" : ""}`}>
-                    {burnoutData?.length ?? 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Employees with sentiment drop</p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Card data-testid="card-sr-my-actions">
+        <Card data-testid="card-sr-feedback-participation">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Action Items</CardTitle>
-            <ListTodo className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Feedback Rate</CardTitle>
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <>
-                <div className="text-2xl font-bold">{myActionStats.pending}</div>
+                <div className="text-2xl font-bold">{feedbackParticipation.rate}%</div>
+                <p className="text-xs text-muted-foreground">{feedbackParticipation.submitted} of {feedbackParticipation.total} employees</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-sr-org-actions">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Action Items</CardTitle>
+            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <>
+                <div className="text-2xl font-bold">{orgActionStats.total}</div>
                 <div className="flex items-center gap-2 flex-wrap mt-1">
-                  {myActionStats.overdue > 0 && (
+                  {orgActionStats.overdue > 0 && (
                     <Badge variant="destructive" className="text-xs">
-                      <Clock className="w-3 h-3 mr-1" /> {myActionStats.overdue} overdue
+                      <Clock className="w-3 h-3 mr-1" /> {orgActionStats.overdue} overdue
                     </Badge>
                   )}
-                  {myActionStats.blocked > 0 && (
-                    <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 text-xs">
-                      {myActionStats.blocked} blocked
-                    </Badge>
-                  )}
+                  <span className="text-xs text-muted-foreground">{orgActionStats.completed} completed</span>
                 </div>
               </>
             )}
