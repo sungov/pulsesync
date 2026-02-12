@@ -32,9 +32,11 @@ export interface IStorage {
   
   getDepartmentStats(): Promise<any[]>;
   getDepartmentStatsWithPeriod(period?: string): Promise<any[]>;
+  getDepartmentStatsForPeriods(periods: string[]): Promise<any[]>;
   getTeamFeedbackWithReview(managerEmail: string, period?: string): Promise<any[]>;
   getLeaderAccountability(): Promise<any[]>;
   getProjectAnalytics(period?: string): Promise<any[]>;
+  getProjectAnalyticsForPeriods(periods: string[]): Promise<any[]>;
   getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]>;
 }
 
@@ -202,6 +204,52 @@ export class DatabaseStorage implements IStorage {
       return result.rows;
     }
     return this.getDepartmentStats();
+  }
+
+  async getDepartmentStatsForPeriods(periods: string[]): Promise<any[]> {
+    if (periods.length === 0) return [];
+    const placeholders = periods.map(p => sql`${p}`);
+    let inClause = placeholders[0];
+    for (let i = 1; i < placeholders.length; i++) {
+      inClause = sql`${inClause}, ${placeholders[i]}`;
+    }
+    const result = await db.execute(sql`
+      SELECT 
+        f.submission_period,
+        u.dept_code,
+        AVG(f.sat_score) as avg_sat_score,
+        COUNT(f.id) as total_feedback
+      FROM users u
+      JOIN feedback f ON u.id = f.user_id
+      WHERE f.submission_period IN (${inClause}) AND u.is_admin = false
+      GROUP BY f.submission_period, u.dept_code
+      ORDER BY f.submission_period
+    `);
+    return result.rows;
+  }
+
+  async getProjectAnalyticsForPeriods(periods: string[]): Promise<any[]> {
+    if (periods.length === 0) return [];
+    const placeholders = periods.map(p => sql`${p}`);
+    let inClause = placeholders[0];
+    for (let i = 1; i < placeholders.length; i++) {
+      inClause = sql`${inClause}, ${placeholders[i]}`;
+    }
+    const result = await db.execute(sql`
+      SELECT 
+        f.submission_period,
+        u.project_code,
+        COUNT(DISTINCT u.id) as employee_count,
+        AVG(f.sat_score) as avg_sat_score,
+        COUNT(f.id) as total_feedback
+      FROM users u
+      JOIN feedback f ON u.id = f.user_id
+      WHERE u.project_code IS NOT NULL AND u.project_code != '' AND u.is_admin = false
+        AND f.submission_period IN (${inClause})
+      GROUP BY f.submission_period, u.project_code
+      ORDER BY f.submission_period
+    `);
+    return result.rows;
   }
 
   async getTeamFeedbackWithReview(managerEmail: string, period?: string): Promise<any[]> {

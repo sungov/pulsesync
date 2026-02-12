@@ -419,21 +419,34 @@ export async function registerRoutes(
     res.json(safeData);
   });
 
+  function getOffsetPeriod(period: string, offsetMonths: number): string {
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const [monthStr, yearStr] = period.split("-");
+    let monthIdx = months.indexOf(monthStr);
+    let year = parseInt(yearStr);
+    monthIdx -= offsetMonths;
+    while (monthIdx < 0) { monthIdx += 12; year--; }
+    while (monthIdx > 11) { monthIdx -= 12; year++; }
+    return `${months[monthIdx]}-${year}`;
+  }
+
+  function getLast12Periods(period: string): string[] {
+    const result: string[] = [];
+    for (let i = 11; i >= 0; i--) {
+      result.push(getOffsetPeriod(period, i));
+    }
+    return result;
+  }
+
   app.get("/api/analytics/department-trends", isAuthenticated, async (req, res) => {
     const period = req.query.period as string | undefined;
+    const compareWith = (req.query.compareWith as string) || "month";
     if (!period) {
       return res.status(400).json({ message: "period is required (e.g., Feb-2026)" });
     }
-    const [monthStr, yearStr] = period.split("-");
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const monthIdx = months.indexOf(monthStr);
-    const year = parseInt(yearStr);
-    let prevPeriod: string;
-    if (monthIdx === 0) {
-      prevPeriod = `Dec-${year - 1}`;
-    } else {
-      prevPeriod = `${months[monthIdx - 1]}-${year}`;
-    }
+
+    const offsetMonths = compareWith === "quarter" ? 3 : 1;
+    const prevPeriod = getOffsetPeriod(period, offsetMonths);
 
     const [currentStats, prevStats] = await Promise.all([
       storage.getDepartmentStatsWithPeriod(period),
@@ -465,21 +478,31 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  app.get("/api/analytics/department-history", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    if (!period) {
+      return res.status(400).json({ message: "period is required" });
+    }
+    const periods = getLast12Periods(period);
+    const rows = await storage.getDepartmentStatsForPeriods(periods);
+    const result = rows.map((r: any) => ({
+      period: r.submission_period,
+      deptCode: r.dept_code || "General",
+      avgSatScore: Number(r.avg_sat_score),
+      totalFeedback: Number(r.total_feedback),
+    }));
+    res.json(result);
+  });
+
   app.get("/api/analytics/project-trends", isAuthenticated, async (req, res) => {
     const period = req.query.period as string | undefined;
+    const compareWith = (req.query.compareWith as string) || "month";
     if (!period) {
       return res.status(400).json({ message: "period is required (e.g., Feb-2026)" });
     }
-    const [monthStr, yearStr] = period.split("-");
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const monthIdx = months.indexOf(monthStr);
-    const year = parseInt(yearStr);
-    let prevPeriod: string;
-    if (monthIdx === 0) {
-      prevPeriod = `Dec-${year - 1}`;
-    } else {
-      prevPeriod = `${months[monthIdx - 1]}-${year}`;
-    }
+
+    const offsetMonths = compareWith === "quarter" ? 3 : 1;
+    const prevPeriod = getOffsetPeriod(period, offsetMonths);
 
     const [currentStats, prevStats] = await Promise.all([
       storage.getProjectAnalytics(period),
@@ -504,6 +527,23 @@ export async function registerRoutes(
         trend: prevScore != null ? parseFloat((currentScore - prevScore).toFixed(2)) : null,
       };
     });
+    res.json(result);
+  });
+
+  app.get("/api/analytics/project-history", isAuthenticated, async (req, res) => {
+    const period = req.query.period as string | undefined;
+    if (!period) {
+      return res.status(400).json({ message: "period is required" });
+    }
+    const periods = getLast12Periods(period);
+    const rows = await storage.getProjectAnalyticsForPeriods(periods);
+    const result = rows.map((r: any) => ({
+      period: r.submission_period,
+      projectCode: r.project_code,
+      avgSatScore: Number(r.avg_sat_score),
+      employeeCount: Number(r.employee_count),
+      totalFeedback: Number(r.total_feedback),
+    }));
     res.json(result);
   });
 

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { useDepartmentTrends, useLeaderAccountability, useUsersList, useProjectTrends, useBurnoutRadar, useEmployeePerformance } from "@/hooks/use-pulse-data";
+import { useDepartmentTrends, useLeaderAccountability, useUsersList, useProjectTrends, useBurnoutRadar, useEmployeePerformance, useDepartmentHistory, useProjectHistory } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ScatterChart, Scatter, ZAxis, Legend, LineChart, Line } from "recharts";
 import { format, subMonths } from "date-fns";
 import { Send, Users, Building2, ArrowLeft, AlertTriangle, CheckCircle2, Eye, FolderKanban, UserCheck, Flame, TrendingUp, TrendingDown, Award, ArrowUpDown } from "lucide-react";
 
@@ -23,6 +23,25 @@ function generatePeriodOptions() {
     const d = subMonths(now, i);
     return format(d, "MMM-yyyy");
   });
+}
+
+function getOffsetPeriodClient(period: string, offset: number): string {
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const [monthStr, yearStr] = period.split("-");
+  let monthIdx = months.indexOf(monthStr);
+  let year = parseInt(yearStr);
+  monthIdx -= offset;
+  while (monthIdx < 0) { monthIdx += 12; year--; }
+  while (monthIdx > 11) { monthIdx -= 12; year++; }
+  return `${months[monthIdx]}-${year}`;
+}
+
+function getLast12PeriodsClient(period: string): string[] {
+  const result: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    result.push(getOffsetPeriodClient(period, i));
+  }
+  return result;
 }
 
 function getHealthStatus(overdueCount: number) {
@@ -60,6 +79,16 @@ function getManagerInitials(email: string, usersData: any[]) {
 
 type ViewTab = "departments" | "projects" | "managers";
 type DrilldownType = "dept" | "project";
+type CompareMode = "current" | "month" | "quarter" | "year";
+
+const COMPARE_LABELS: Record<CompareMode, string> = {
+  current: "Current Period",
+  month: "vs Last Month",
+  quarter: "vs Last Quarter",
+  year: "12 Month Trend",
+};
+
+const LINE_COLORS = ["#4f46e5", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
 
 function ScatterTooltipContent({ active, payload }: any) {
   if (!active || !payload?.length) return null;
@@ -276,14 +305,18 @@ export default function ExecutiveDashboard() {
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>("departments");
+  const [compareMode, setCompareMode] = useState<CompareMode>("month");
 
-  const { data: deptData, isLoading: deptLoading } = useDepartmentTrends(period);
+  const compareParam = compareMode === "current" || compareMode === "year" ? undefined : compareMode;
+  const { data: deptData, isLoading: deptLoading } = useDepartmentTrends(period, compareParam);
   const { data: leaderData, isLoading: leaderLoading } = useLeaderAccountability();
   const { data: usersData, isLoading: usersLoading } = useUsersList();
-  const { data: projectData, isLoading: projectLoading } = useProjectTrends(period);
+  const { data: projectData, isLoading: projectLoading } = useProjectTrends(period, compareParam);
   const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
   const { data: deptEmployees, isLoading: deptEmpLoading } = useEmployeePerformance(selectedDept || undefined);
   const { data: projEmployees, isLoading: projEmpLoading } = useEmployeePerformance(undefined, selectedProject || undefined);
+  const { data: deptHistoryRaw, isLoading: deptHistLoading } = useDepartmentHistory(period, compareMode === "year");
+  const { data: projHistoryRaw, isLoading: projHistLoading } = useProjectHistory(period, compareMode === "year");
 
   const allUsersArr = (usersData as any[]) || [];
 
@@ -295,7 +328,7 @@ export default function ExecutiveDashboard() {
   };
 
   const chartData = useMemo(() =>
-    deptData?.map(d => ({
+    deptData?.map((d: any) => ({
       name: d.deptCode || "General",
       satisfaction: d.avgSatScore,
       feedback: d.totalFeedback,
@@ -312,6 +345,46 @@ export default function ExecutiveDashboard() {
     })) || [],
     [projectData]
   );
+
+  const deptHistoryLines = useMemo(() => {
+    if (!deptHistoryRaw || !Array.isArray(deptHistoryRaw)) return { chartData: [], departments: [] };
+    const departments = Array.from(new Set(deptHistoryRaw.map((r: any) => r.deptCode))) as string[];
+    const periodMap = new Map<string, Record<string, number>>();
+    for (const r of deptHistoryRaw) {
+      if (!periodMap.has(r.period)) periodMap.set(r.period, {});
+      periodMap.get(r.period)![r.deptCode] = r.avgSatScore;
+    }
+    const periods = getLast12PeriodsClient(period);
+    const lineChartData = periods.map(p => {
+      const row: any = { period: p };
+      for (const dept of departments) {
+        row[dept] = periodMap.get(p)?.[dept] ?? null;
+      }
+      return row;
+    });
+    return { chartData: lineChartData, departments };
+  }, [deptHistoryRaw, period]);
+
+  const projHistoryLines = useMemo(() => {
+    if (!projHistoryRaw || !Array.isArray(projHistoryRaw)) return { chartData: [], projects: [] };
+    const projects = Array.from(new Set(projHistoryRaw.map((r: any) => r.projectCode))) as string[];
+    const periodMap = new Map<string, Record<string, number>>();
+    for (const r of projHistoryRaw) {
+      if (!periodMap.has(r.period)) periodMap.set(r.period, {});
+      periodMap.get(r.period)![r.projectCode] = r.avgSatScore;
+    }
+    const periods = getLast12PeriodsClient(period);
+    const lineChartData = periods.map(p => {
+      const row: any = { period: p };
+      for (const proj of projects) {
+        row[proj] = periodMap.get(p)?.[proj] ?? null;
+      }
+      return row;
+    });
+    return { chartData: lineChartData, projects };
+  }, [projHistoryRaw, period]);
+
+  const showTrends = compareMode === "month" || compareMode === "quarter";
 
   const sortedLeaderData = useMemo(() =>
     leaderData
@@ -417,6 +490,16 @@ export default function ExecutiveDashboard() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={compareMode} onValueChange={(v) => setCompareMode(v as CompareMode)} data-testid="select-compare-mode">
+            <SelectTrigger className="w-[180px]" data-testid="select-compare-trigger">
+              <SelectValue placeholder="Compare..." />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(COMPARE_LABELS) as CompareMode[]).map(mode => (
+                <SelectItem key={mode} value={mode} data-testid={`select-compare-${mode}`}>{COMPARE_LABELS[mode]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button onClick={handleNudge} data-testid="button-nudge-managers">
             <Send className="w-4 h-4 mr-2" /> Nudge Managers
           </Button>
@@ -508,17 +591,17 @@ export default function ExecutiveDashboard() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <p className="text-sm font-medium text-muted-foreground">{dept.deptCode || "General"}</p>
-                          {trend != null && trend > 0.2 && (
+                          {showTrends && trend != null && trend > 0.2 && (
                             <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-xs">
                               <TrendingUp className="w-3 h-3 mr-0.5" /> +{trend.toFixed(1)}
                             </Badge>
                           )}
-                          {trend != null && trend < -0.2 && (
+                          {showTrends && trend != null && trend < -0.2 && (
                             <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-xs">
                               <TrendingDown className="w-3 h-3 mr-0.5" /> {trend.toFixed(1)}
                             </Badge>
                           )}
-                          {trend != null && Math.abs(trend) <= 0.2 && (
+                          {showTrends && trend != null && Math.abs(trend) <= 0.2 && (
                             <span className="text-xs text-muted-foreground">Stable</span>
                           )}
                         </div>
@@ -541,29 +624,67 @@ export default function ExecutiveDashboard() {
           </section>
 
           <section data-testid="section-sentiment-chart">
-            <Card>
-              <CardHeader>
-                <CardTitle>Department Sentiment Analysis</CardTitle>
-                <CardDescription>Average Satisfaction Scores by Department ({period})</CardDescription>
-              </CardHeader>
-              <CardContent className="h-[350px]">
-                {deptLoading ? (
-                  <div className="flex items-center justify-center h-full"><Skeleton className="h-full w-full" /></div>
-                ) : chartData.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">No chart data available</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                      <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                      <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                      <Bar dataKey="satisfaction" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Satisfaction" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
+            {compareMode === "year" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Department Satisfaction Trend</CardTitle>
+                  <CardDescription>12-month satisfaction scores by department (ending {period})</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[400px]">
+                  {deptHistLoading ? (
+                    <div className="flex items-center justify-center h-full"><Skeleton className="h-full w-full" /></div>
+                  ) : deptHistoryLines.chartData.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">No historical data available</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={deptHistoryLines.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="period" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
+                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
+                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Legend />
+                        {deptHistoryLines.departments.map((dept, i) => (
+                          <Line
+                            key={dept}
+                            type="monotone"
+                            dataKey={dept}
+                            stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                            connectNulls
+                            name={dept}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Department Sentiment Analysis</CardTitle>
+                  <CardDescription>Average Satisfaction Scores by Department ({period})</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[350px]">
+                  {deptLoading ? (
+                    <div className="flex items-center justify-center h-full"><Skeleton className="h-full w-full" /></div>
+                  ) : chartData.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">No chart data available</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Bar dataKey="satisfaction" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Satisfaction" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </section>
         </>
       )}
@@ -597,17 +718,17 @@ export default function ExecutiveDashboard() {
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <p className="text-sm font-medium text-muted-foreground">{proj.projectCode}</p>
-                          {trend != null && trend > 0.2 && (
+                          {showTrends && trend != null && trend > 0.2 && (
                             <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-xs">
                               <TrendingUp className="w-3 h-3 mr-0.5" /> +{trend.toFixed(1)}
                             </Badge>
                           )}
-                          {trend != null && trend < -0.2 && (
+                          {showTrends && trend != null && trend < -0.2 && (
                             <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-xs">
                               <TrendingDown className="w-3 h-3 mr-0.5" /> {trend.toFixed(1)}
                             </Badge>
                           )}
-                          {trend != null && Math.abs(trend) <= 0.2 && (
+                          {showTrends && trend != null && Math.abs(trend) <= 0.2 && (
                             <span className="text-xs text-muted-foreground">Stable</span>
                           )}
                         </div>
@@ -625,23 +746,61 @@ export default function ExecutiveDashboard() {
                 })}
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Project Satisfaction Comparison</CardTitle>
-                  <CardDescription>Average satisfaction scores across projects ({period})</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={projectChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                      <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                      <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                      <Bar dataKey="satisfaction" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Satisfaction" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+              {compareMode === "year" ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Project Satisfaction Trend</CardTitle>
+                    <CardDescription>12-month satisfaction scores by project (ending {period})</CardDescription>
+                  </CardHeader>
+                  <CardContent className="h-[400px]">
+                    {projHistLoading ? (
+                      <div className="flex items-center justify-center h-full"><Skeleton className="h-full w-full" /></div>
+                    ) : projHistoryLines.chartData.length === 0 ? (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">No historical data available</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={projHistoryLines.chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                          <XAxis dataKey="period" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} angle={-30} textAnchor="end" height={60} />
+                          <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} domain={[0, 10]} />
+                          <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                          <Legend />
+                          {projHistoryLines.projects.map((proj, i) => (
+                            <Line
+                              key={proj}
+                              type="monotone"
+                              dataKey={proj}
+                              stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                              connectNulls
+                              name={proj}
+                            />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Project Satisfaction Comparison</CardTitle>
+                    <CardDescription>Average satisfaction scores across projects ({period})</CardDescription>
+                  </CardHeader>
+                  <CardContent className="h-[350px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={projectChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Bar dataKey="satisfaction" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Satisfaction" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </section>

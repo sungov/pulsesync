@@ -269,12 +269,15 @@ export function useProjectAnalytics(period?: string) {
   });
 }
 
-export function useDepartmentTrends(period?: string) {
-  const queryString = period ? `?period=${period}` : "";
+export function useDepartmentTrends(period?: string, compareWith?: string) {
+  const params = new URLSearchParams();
+  if (period) params.set("period", period);
+  if (compareWith) params.set("compareWith", compareWith);
+  const qs = params.toString() ? `?${params.toString()}` : "";
   return useQuery({
-    queryKey: ["/api/analytics/department-trends", period],
+    queryKey: ["/api/analytics/department-trends", period, compareWith],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/department-trends${queryString}`, { credentials: "include" });
+      const res = await fetch(`/api/analytics/department-trends${qs}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch department trends");
       return res.json();
     },
@@ -282,16 +285,45 @@ export function useDepartmentTrends(period?: string) {
   });
 }
 
-export function useProjectTrends(period?: string) {
-  const queryString = period ? `?period=${period}` : "";
+export function useProjectTrends(period?: string, compareWith?: string) {
+  const params = new URLSearchParams();
+  if (period) params.set("period", period);
+  if (compareWith) params.set("compareWith", compareWith);
+  const qs = params.toString() ? `?${params.toString()}` : "";
   return useQuery({
-    queryKey: ["/api/analytics/project-trends", period],
+    queryKey: ["/api/analytics/project-trends", period, compareWith],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/project-trends${queryString}`, { credentials: "include" });
+      const res = await fetch(`/api/analytics/project-trends${qs}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch project trends");
       return res.json();
     },
     enabled: !!period,
+  });
+}
+
+export function useDepartmentHistory(period?: string, enabled = true) {
+  const qs = period ? `?period=${period}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/department-history", period],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/department-history${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch department history");
+      return res.json();
+    },
+    enabled: !!period && enabled,
+  });
+}
+
+export function useProjectHistory(period?: string, enabled = true) {
+  const qs = period ? `?period=${period}` : "";
+  return useQuery({
+    queryKey: ["/api/analytics/project-history", period],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/project-history${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch project history");
+      return res.json();
+    },
+    enabled: !!period && enabled,
   });
 }
 
