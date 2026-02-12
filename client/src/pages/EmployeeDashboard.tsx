@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { SyncLoader } from "@/components/SyncLoader";
 import {
@@ -28,20 +27,20 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-const MOOD_OPTIONS = ["Great", "Good", "Neutral", "Challenged", "Burned Out"] as const;
+const MOOD_LABELS = ["Burned Out", "Challenged", "Neutral", "Good", "Great"] as const;
 
-const moodConfig: Record<string, { color: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  "Great": { color: "text-emerald-600", variant: "default" },
-  "Good": { color: "text-blue-600", variant: "default" },
-  "Neutral": { color: "text-muted-foreground", variant: "secondary" },
-  "Challenged": { color: "text-amber-600", variant: "secondary" },
-  "Burned Out": { color: "text-rose-600", variant: "destructive" },
+const moodVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  "Great": "default",
+  "Good": "default",
+  "Neutral": "secondary",
+  "Challenged": "secondary",
+  "Burned Out": "destructive",
 };
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
   const [satScore, setSatScore] = useState([7]);
-  const [moodScore, setMoodScore] = useState<string>("");
+  const [moodIndex, setMoodIndex] = useState([3]);
   const [workloadLevel, setWorkloadLevel] = useState([3]);
   const [workLifeBalance, setWorkLifeBalance] = useState([3]);
   const [accomplishments, setAccomplishments] = useState("");
@@ -60,7 +59,8 @@ export default function EmployeeDashboard() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !moodScore) return;
+    if (!user) return;
+    const moodScore = MOOD_LABELS[moodIndex[0] - 1];
 
     await new Promise(r => setTimeout(r, 800));
 
@@ -90,7 +90,7 @@ export default function EmployeeDashboard() {
         setProcessSuggestions("");
         setPtoCoverage("");
         setSatScore([7]);
-        setMoodScore("");
+        setMoodIndex([3]);
         setWorkloadLevel([3]);
         setWorkLifeBalance([3]);
       }
@@ -159,27 +159,32 @@ export default function EmployeeDashboard() {
                     </div>
 
                     <div className="space-y-4">
-                      <Label className="text-base font-semibold flex items-center gap-2">
-                        <Smile className="w-4 h-4 text-amber-500" />
-                        Overall Mood
-                      </Label>
-                      <Select value={moodScore} onValueChange={setMoodScore}>
-                        <SelectTrigger data-testid="select-mood">
-                          <SelectValue placeholder="How are you feeling?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MOOD_OPTIONS.map((mood) => (
-                            <SelectItem key={mood} value={mood} data-testid={`option-mood-${mood.toLowerCase().replace(/\s+/g, "-")}`}>
-                              <span className={moodConfig[mood]?.color}>{mood}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {moodScore && (
-                        <Badge variant={moodConfig[moodScore]?.variant || "secondary"} data-testid="badge-mood-value">
-                          {moodScore}
+                      <div className="flex justify-between items-center flex-wrap gap-1">
+                        <Label className="text-base font-semibold flex items-center gap-2">
+                          <Smile className="w-4 h-4 text-amber-500" />
+                          Overall Mood
+                        </Label>
+                        <Badge
+                          variant={moodVariant[MOOD_LABELS[moodIndex[0] - 1]] || "secondary"}
+                          className="text-lg font-bold px-3"
+                          data-testid="badge-mood-value"
+                        >
+                          {MOOD_LABELS[moodIndex[0] - 1]}
                         </Badge>
-                      )}
+                      </div>
+                      <Slider
+                        value={moodIndex}
+                        onValueChange={setMoodIndex}
+                        min={1}
+                        max={5}
+                        step={1}
+                        className="py-2"
+                        data-testid="slider-mood"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Burned Out</span>
+                        <span>Great</span>
+                      </div>
                     </div>
 
                     <div className="space-y-4">
@@ -390,7 +395,7 @@ export default function EmployeeDashboard() {
                   <Button
                     type="submit"
                     size="lg"
-                    disabled={!moodScore || createFeedback.isPending}
+                    disabled={createFeedback.isPending}
                     className="w-full md:w-auto font-semibold shadow-lg shadow-primary/25 transition-all"
                     data-testid="button-submit-feedback"
                   >
