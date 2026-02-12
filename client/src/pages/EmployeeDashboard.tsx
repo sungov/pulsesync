@@ -28,14 +28,25 @@ import {
 import { motion } from "framer-motion";
 
 const MOOD_LABELS = ["Burned Out", "Challenged", "Neutral", "Good", "Great"] as const;
+const SAT_LABELS = ["Very Dissatisfied", "Dissatisfied", "Somewhat Dissatisfied", "Slightly Dissatisfied", "Mixed", "Slightly Satisfied", "Somewhat Satisfied", "Satisfied", "Very Satisfied", "Thriving"] as const;
+const WORKLOAD_LABELS = ["Under-utilized", "Light", "Balanced", "Heavy", "Overwhelmed"] as const;
+const BALANCE_LABELS = ["Poor", "Fair", "Okay", "Good", "Excellent"] as const;
 
-const moodVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  "Great": "default",
-  "Good": "default",
-  "Neutral": "secondary",
-  "Challenged": "secondary",
-  "Burned Out": "destructive",
-};
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+function getScaleVariant(value: number, max: number): BadgeVariant {
+  const ratio = value / max;
+  if (ratio <= 0.3) return "destructive";
+  if (ratio <= 0.6) return "secondary";
+  return "default";
+}
+
+function getInverseScaleVariant(value: number, max: number): BadgeVariant {
+  const ratio = value / max;
+  if (ratio <= 0.4) return "default";
+  if (ratio <= 0.7) return "secondary";
+  return "destructive";
+}
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
@@ -97,8 +108,6 @@ export default function EmployeeDashboard() {
     });
   };
 
-  const workloadLabels = ["Under-utilized", "Light", "Balanced", "Heavy", "Overwhelmed"];
-  const balanceLabels = ["Poor", "Fair", "Okay", "Good", "Excellent"];
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -136,11 +145,10 @@ export default function EmployeeDashboard() {
                           Work Satisfaction
                         </Label>
                         <Badge
-                          variant={satScore[0] >= 8 ? "default" : satScore[0] <= 4 ? "destructive" : "secondary"}
-                          className="text-lg font-bold px-3"
+                          variant={getScaleVariant(satScore[0], 10)}
                           data-testid="badge-sat-score"
                         >
-                          {satScore[0]}/10
+                          {SAT_LABELS[satScore[0] - 1]}
                         </Badge>
                       </div>
                       <Slider
@@ -154,7 +162,7 @@ export default function EmployeeDashboard() {
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Very Dissatisfied</span>
-                        <span>Very Satisfied</span>
+                        <span>Thriving</span>
                       </div>
                     </div>
 
@@ -165,8 +173,7 @@ export default function EmployeeDashboard() {
                           Overall Mood
                         </Label>
                         <Badge
-                          variant={moodVariant[MOOD_LABELS[moodIndex[0] - 1]] || "secondary"}
-                          className="text-lg font-bold px-3"
+                          variant={getScaleVariant(moodIndex[0], 5)}
                           data-testid="badge-mood-value"
                         >
                           {MOOD_LABELS[moodIndex[0] - 1]}
@@ -193,8 +200,11 @@ export default function EmployeeDashboard() {
                           <Scale className="w-4 h-4 text-violet-500" />
                           Workload Level
                         </Label>
-                        <Badge variant="outline" className="font-mono" data-testid="badge-workload">
-                          {workloadLabels[workloadLevel[0] - 1]}
+                        <Badge
+                          variant={getInverseScaleVariant(workloadLevel[0], 5)}
+                          data-testid="badge-workload"
+                        >
+                          {WORKLOAD_LABELS[workloadLevel[0] - 1]}
                         </Badge>
                       </div>
                       <Slider
@@ -218,8 +228,11 @@ export default function EmployeeDashboard() {
                           <HeartHandshake className="w-4 h-4 text-rose-500" />
                           Work-Life Balance
                         </Label>
-                        <Badge variant="outline" className="font-mono" data-testid="badge-balance">
-                          {balanceLabels[workLifeBalance[0] - 1]}
+                        <Badge
+                          variant={getScaleVariant(workLifeBalance[0], 5)}
+                          data-testid="badge-balance"
+                        >
+                          {BALANCE_LABELS[workLifeBalance[0] - 1]}
                         </Badge>
                       </div>
                       <Slider
