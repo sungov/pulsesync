@@ -36,6 +36,12 @@
 
   --radius: 0.75rem;
 
+  --chart-1: 226 58% 48%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 262 52% 55%;
+  --chart-4: 199 89% 48%;
+  --chart-5: 43 96% 56%;
+
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Outfit', sans-serif;
 }
@@ -68,6 +74,12 @@
   --border: 217.2 32.6% 17.5%;
   --input: 217.2 32.6% 17.5%;
   --ring: 224.3 76.3% 48%;
+
+  --chart-1: 217 91% 60%;
+  --chart-2: 173 58% 49%;
+  --chart-3: 262 52% 65%;
+  --chart-4: 199 89% 58%;
+  --chart-5: 43 96% 66%;
 }
 
 @layer base {
