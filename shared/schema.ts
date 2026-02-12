@@ -12,14 +12,30 @@ export * from "./models/chat";
 
 export const feedback = pgTable("feedback", {
   id: serial("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id), // FK to extended users table
-  submissionPeriod: text("submission_period").notNull(), // e.g. "Feb-2026"
-  satScore: integer("sat_score").notNull(),
-  moodScore: integer("mood_score").notNull(),
+  userId: text("user_id").notNull().references(() => users.id),
+  submissionPeriod: text("submission_period").notNull(),
+  
+  // Numerical/Scale metrics
+  satScore: integer("sat_score").notNull(), // 1-10
+  moodScore: text("mood_score").notNull(), // Great, Good, Neutral, Challenged, Burned Out
+  workloadLevel: integer("workload_level").notNull(), // 1-5
+  workLifeBalance: integer("work_life_balance").notNull(), // 1-5
+  
+  // Qualitative inputs
   accomplishments: text("accomplishments").notNull(),
+  disappointments: text("disappointments").notNull(),
   blockers: text("blockers").notNull(),
-  aiSentiment: real("ai_sentiment"), // 0 to 1
+  mentoringCulture: text("mentoring_culture").notNull(),
+  supportNeeds: text("support_needs").notNull(),
+  goalProgress: text("goal_progress").notNull(),
+  processSuggestions: text("process_suggestions").notNull(),
+  ptoCoverage: text("pto_coverage").notNull(),
+  
+  // AI generated fields
+  aiSentiment: real("ai_sentiment"),
   aiSummary: text("ai_summary"),
+  aiSuggestedActionItems: text("ai_suggested_action_items"),
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -37,7 +53,7 @@ export const actionItems = pgTable("action_items", {
   mgrEmail: text("mgr_email").notNull(),
   task: text("task").notNull(),
   dueDate: timestamp("due_date").notNull(),
-  status: text("status").default("Pending").notNull(), // Pending, Completed
+  status: text("status").default("Pending").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -67,7 +83,8 @@ export const insertFeedbackSchema = createInsertSchema(feedback).omit({
   id: true, 
   createdAt: true, 
   aiSentiment: true, 
-  aiSummary: true 
+  aiSummary: true,
+  aiSuggestedActionItems: true
 });
 
 export const insertManagerReviewSchema = createInsertSchema(managerReviews).omit({ 
@@ -89,10 +106,3 @@ export type InsertManagerReview = z.infer<typeof insertManagerReviewSchema>;
 
 export type ActionItem = typeof actionItems.$inferSelect;
 export type InsertActionItem = z.infer<typeof insertActionItemSchema>;
-
-export type CreateFeedbackRequest = InsertFeedback;
-export type UpdateFeedbackRequest = Partial<InsertFeedback>;
-
-// For Action Items
-export type CreateActionItemRequest = InsertActionItem;
-export type UpdateActionItemRequest = Partial<InsertActionItem>;

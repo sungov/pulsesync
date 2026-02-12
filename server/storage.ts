@@ -1,11 +1,6 @@
+import { type User, type InsertFeedback, type Feedback, type InsertManagerReview, type ManagerReview, type InsertActionItem, type ActionItem, type UpdateActionItemRequest } from "@shared/schema";
 import { db } from "./db";
-import { 
-  users, feedback, managerReviews, actionItems,
-  type User, type InsertFeedback, type Feedback, 
-  type InsertManagerReview, type ManagerReview,
-  type InsertActionItem, type ActionItem,
-  type UpdateActionItemRequest
-} from "@shared/schema";
+import { users, feedback, managerReviews, actionItems } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -18,10 +13,10 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
 
   // Feedback
-  createFeedback(feedback: InsertFeedback): Promise<Feedback>;
+  createFeedback(feedback: InsertFeedback & { aiSentiment?: number; aiSummary?: string; aiSuggestedActionItems?: string }): Promise<Feedback>;
   getFeedback(id: number): Promise<Feedback | undefined>;
   getFeedbackByUser(userId: string): Promise<Feedback[]>;
-  getAllFeedback(): Promise<Feedback[]>; // For Senior Mgmt
+  getAllFeedback(): Promise<Feedback[]>;
 
   // Reviews
   createManagerReview(review: InsertManagerReview): Promise<ManagerReview>;
@@ -37,7 +32,6 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // Users
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -65,8 +59,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users);
   }
 
-  // Feedback
-  async createFeedback(insertFeedback: InsertFeedback): Promise<Feedback> {
+  async createFeedback(insertFeedback: any): Promise<Feedback> {
     const [newItem] = await db.insert(feedback).values(insertFeedback).returning();
     return newItem;
   }
@@ -84,7 +77,6 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(feedback).orderBy(desc(feedback.createdAt));
   }
 
-  // Reviews
   async createManagerReview(review: InsertManagerReview): Promise<ManagerReview> {
     const [newItem] = await db.insert(managerReviews).values(review).returning();
     return newItem;
@@ -94,7 +86,6 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(managerReviews).where(eq(managerReviews.feedbackId, feedbackId));
   }
 
-  // Action Items
   async createActionItem(item: InsertActionItem): Promise<ActionItem> {
     const [newItem] = await db.insert(actionItems).values(item).returning();
     return newItem;
@@ -102,19 +93,14 @@ export class DatabaseStorage implements IStorage {
 
   async getActionItems(empEmail?: string, mgrEmail?: string): Promise<ActionItem[]> {
     let query = db.select().from(actionItems);
+    const conditions = [];
+    if (empEmail) conditions.push(eq(actionItems.empEmail, empEmail));
+    if (mgrEmail) conditions.push(eq(actionItems.mgrEmail, mgrEmail));
     
-    if (empEmail && mgrEmail) {
+    if (conditions.length > 0) {
       // @ts-ignore
-      query = query.where(and(eq(actionItems.empEmail, empEmail), eq(actionItems.mgrEmail, mgrEmail)));
-    } else if (empEmail) {
-      // @ts-ignore
-      query = query.where(eq(actionItems.empEmail, empEmail));
-    } else if (mgrEmail) {
-      // @ts-ignore
-      query = query.where(eq(actionItems.mgrEmail, mgrEmail));
+      query = query.where(and(...conditions));
     }
-    
-    // @ts-ignore
     return query.orderBy(desc(actionItems.dueDate));
   }
 
@@ -123,16 +109,11 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  // Analytics
   async getDepartmentStats(): Promise<any[]> {
-    // This is a complex aggregation, simulating it via simple query + JS processing or raw SQL if needed.
-    // For now, let's fetch users + feedback and aggregate in memory or use raw SQL.
-    // Raw SQL for aggregation:
     const result = await db.execute(sql`
       SELECT 
         u.dept_code,
         AVG(f.sat_score) as avg_sat_score,
-        AVG(f.mood_score) as avg_mood_score,
         COUNT(f.id) as total_feedback
       FROM users u
       JOIN feedback f ON u.id = f.user_id
