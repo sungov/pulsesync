@@ -51,6 +51,7 @@ export const actionItems = pgTable("action_items", {
   id: serial("id").primaryKey(),
   empEmail: text("emp_email").notNull(),
   mgrEmail: text("mgr_email").notNull(),
+  assignedTo: text("assigned_to").default("EMPLOYEE").notNull(),
   task: text("task").notNull(),
   dueDate: timestamp("due_date").notNull(),
   status: text("status").default("Pending").notNull(),
