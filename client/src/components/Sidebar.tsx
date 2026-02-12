@@ -5,10 +5,13 @@ import {
   Users, 
   ListTodo, 
   LogOut, 
-  BrainCircuit,
   Shield,
   ChevronRight,
-  Heart
+  Heart,
+  Building2,
+  FolderKanban,
+  UserCheck,
+  Flame
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -42,16 +45,34 @@ export function Sidebar() {
       roles: ["MANAGER", "SENIOR_MGMT"],
     },
     {
+      label: "Departments",
+      href: "/departments",
+      icon: Building2,
+      roles: ["SENIOR_MGMT"],
+    },
+    {
+      label: "Projects",
+      href: "/projects",
+      icon: FolderKanban,
+      roles: ["SENIOR_MGMT"],
+    },
+    {
+      label: "Manager Insights",
+      href: "/managers",
+      icon: UserCheck,
+      roles: ["SENIOR_MGMT"],
+    },
+    {
+      label: "Burnout Alerts",
+      href: "/burnout-alerts",
+      icon: Flame,
+      roles: ["SENIOR_MGMT"],
+    },
+    {
       label: "Recognition Wall",
       href: "/kudos",
       icon: Heart,
       roles: ["EMPLOYEE", "MANAGER", "SENIOR_MGMT"],
-    },
-    {
-      label: "Executive Hub",
-      href: "/executive",
-      icon: BrainCircuit,
-      roles: ["SENIOR_MGMT"],
     },
   ];
 

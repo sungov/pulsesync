@@ -6,7 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ManagerDashboard from "@/pages/ManagerDashboard";
-import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
+import DepartmentAnalysis from "@/pages/DepartmentAnalysis";
+import ProjectAnalysis from "@/pages/ProjectAnalysis";
+import ManagerAnalysis from "@/pages/ManagerAnalysis";
+import BurnoutAlerts from "@/pages/BurnoutAlerts";
 import EmployeeFeedback from "@/pages/EmployeeFeedback";
 import AdminPanel from "@/pages/AdminPanel";
 import ReviewFeedback from "@/pages/ReviewFeedback";
@@ -38,8 +41,17 @@ function Router() {
       <Route path="/team-radar">
          <AuthenticatedLayout><ManagerDashboard /></AuthenticatedLayout>
       </Route>
-      <Route path="/executive">
-         <AuthenticatedLayout><ExecutiveDashboard /></AuthenticatedLayout>
+      <Route path="/departments">
+         <AuthenticatedLayout><DepartmentAnalysis /></AuthenticatedLayout>
+      </Route>
+      <Route path="/projects">
+         <AuthenticatedLayout><ProjectAnalysis /></AuthenticatedLayout>
+      </Route>
+      <Route path="/managers">
+         <AuthenticatedLayout><ManagerAnalysis /></AuthenticatedLayout>
+      </Route>
+      <Route path="/burnout-alerts">
+         <AuthenticatedLayout><BurnoutAlerts /></AuthenticatedLayout>
       </Route>
       <Route path="/admin">
          <AuthenticatedLayout><AdminPanel /></AuthenticatedLayout>

@@ -1,21 +1,19 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDepartmentTrends, useLeaderAccountability, useBurnoutRadar, useActionItemsForUser, useUsersList } from "@/hooks/use-pulse-data";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Building2, Users, Flame, ArrowRight, AlertTriangle,
   ClipboardCheck, ListTodo, CheckCircle2,
   Clock, TrendingDown, TrendingUp, Minus,
-  ShieldCheck, Star, MessageSquare
+  FolderKanban, UserCheck, ShieldCheck
 } from "lucide-react";
 import { Link } from "wouter";
-import { format, subMonths } from "date-fns";
+import { format } from "date-fns";
 
 const currentPeriod = format(new Date(), "MMM-yyyy");
 
@@ -38,27 +36,6 @@ function getSentimentColor(score: number) {
   return "text-destructive";
 }
 
-function generatePeriodOptions(): string[] {
-  const options: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    options.push(format(subMonths(now, i), "MMM-yyyy"));
-  }
-  return options;
-}
-
-function getRatingColor(rating: number) {
-  if (rating >= 4) return "text-green-600 dark:text-green-400";
-  if (rating >= 3) return "text-orange-500 dark:text-orange-400";
-  return "text-destructive";
-}
-
-function getRatingBadgeVariant(rating: number): "default" | "secondary" | "destructive" {
-  if (rating >= 4) return "default";
-  if (rating >= 3) return "secondary";
-  return "destructive";
-}
-
 export default function SeniorMgmtOverview() {
   const { user } = useAuth();
   const { data: deptData, isLoading: deptLoading } = useDepartmentTrends(currentPeriod);
@@ -67,33 +44,6 @@ export default function SeniorMgmtOverview() {
   const { data: reportees, isLoading: reporteesLoading } = useUsersList(undefined, user?.email || "");
   const { data: allActionItems, isLoading: actionsLoading } = useActionItemsForUser(user?.email ?? undefined);
   const { data: allUsers, isLoading: usersLoading } = useUsersList();
-
-  const [mgrFeedbackPeriod, setMgrFeedbackPeriod] = useState("all");
-  const [mgrFeedbackFilter, setMgrFeedbackFilter] = useState("all");
-  const periodOptions = generatePeriodOptions();
-
-  const { data: mgrFeedbackSummary, isLoading: summaryLoading } = useQuery<any[]>({
-    queryKey: ["/api/manager-feedback/summary"],
-    queryFn: async () => {
-      const res = await fetch("/api/manager-feedback/summary", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch manager feedback summary");
-      return res.json();
-    },
-  });
-
-  const mgrFeedbackQueryParams = new URLSearchParams();
-  if (mgrFeedbackPeriod !== "all") mgrFeedbackQueryParams.append("period", mgrFeedbackPeriod);
-  if (mgrFeedbackFilter !== "all") mgrFeedbackQueryParams.append("managerEmail", mgrFeedbackFilter);
-  const mgrFeedbackQs = mgrFeedbackQueryParams.toString() ? `?${mgrFeedbackQueryParams.toString()}` : "";
-
-  const { data: mgrFeedbackList, isLoading: feedbackListLoading } = useQuery<any[]>({
-    queryKey: ["/api/manager-feedback", mgrFeedbackPeriod, mgrFeedbackFilter],
-    queryFn: async () => {
-      const res = await fetch(`/api/manager-feedback${mgrFeedbackQs}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch manager feedback");
-      return res.json();
-    },
-  });
 
   const isLoading = deptLoading || leaderLoading || burnoutLoading || reporteesLoading || actionsLoading || usersLoading;
 
@@ -180,22 +130,24 @@ export default function SeniorMgmtOverview() {
           </CardContent>
         </Card>
 
-        <Card data-testid="card-sr-burnout-alerts">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Burnout Alerts</CardTitle>
-            <Flame className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <>
-                <div className={`text-2xl font-bold ${(burnoutData?.length ?? 0) > 0 ? "text-destructive" : ""}`}>
-                  {burnoutData?.length ?? 0}
-                </div>
-                <p className="text-xs text-muted-foreground">Employees with sentiment drop</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <Link href="/burnout-alerts">
+          <Card className="cursor-pointer hover-elevate" data-testid="card-sr-burnout-alerts">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Burnout Alerts</CardTitle>
+              <Flame className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {isLoading ? <Skeleton className="h-8 w-16" /> : (
+                <>
+                  <div className={`text-2xl font-bold ${(burnoutData?.length ?? 0) > 0 ? "text-destructive" : ""}`}>
+                    {burnoutData?.length ?? 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Employees with sentiment drop</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
 
         <Card data-testid="card-sr-my-actions">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -224,6 +176,68 @@ export default function SeniorMgmtOverview() {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link href="/departments">
+          <Card className="cursor-pointer hover-elevate h-full" data-testid="card-nav-departments">
+            <CardContent className="p-5 flex flex-col items-center text-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Departments</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{totalDepts} departments</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/projects">
+          <Card className="cursor-pointer hover-elevate h-full" data-testid="card-nav-projects">
+            <CardContent className="p-5 flex flex-col items-center text-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <FolderKanban className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Projects</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{totalProjects} projects</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/managers">
+          <Card className="cursor-pointer hover-elevate h-full" data-testid="card-nav-managers">
+            <CardContent className="p-5 flex flex-col items-center text-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <UserCheck className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Managers</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Performance & Feedback</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/burnout-alerts">
+          <Card className="cursor-pointer hover-elevate h-full" data-testid="card-nav-burnout">
+            <CardContent className="p-5 flex flex-col items-center text-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${(burnoutData?.length ?? 0) > 0 ? "bg-destructive/10" : "bg-primary/10"}`}>
+                <Flame className={`w-5 h-5 ${(burnoutData?.length ?? 0) > 0 ? "text-destructive" : "text-primary"}`} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Burnout Alerts</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{burnoutData?.length ?? 0} at risk</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card data-testid="card-sr-dept-health">
           <CardHeader className="pb-3">
@@ -232,8 +246,8 @@ export default function SeniorMgmtOverview() {
                 <Building2 className="w-4 h-4 text-primary" />
                 Department Health
               </CardTitle>
-              <Link href="/executive">
-                <Button variant="ghost" size="sm" data-testid="link-executive-hub">
+              <Link href="/departments">
+                <Button variant="ghost" size="sm" data-testid="link-dept-analysis">
                   Full Analytics <ArrowRight className="w-3 h-3 ml-1" />
                 </Button>
               </Link>
@@ -297,9 +311,9 @@ export default function SeniorMgmtOverview() {
                 <AlertTriangle className="w-4 h-4 text-orange-500" />
                 Managers Needing Attention
               </CardTitle>
-              <Link href="/executive">
-                <Button variant="ghost" size="sm" data-testid="link-leader-audit">
-                  Leader Audit <ArrowRight className="w-3 h-3 ml-1" />
+              <Link href="/managers">
+                <Button variant="ghost" size="sm" data-testid="link-manager-analysis">
+                  Manager Insights <ArrowRight className="w-3 h-3 ml-1" />
                 </Button>
               </Link>
             </div>
@@ -372,174 +386,6 @@ export default function SeniorMgmtOverview() {
           </CardContent>
         </Card>
       )}
-
-      {(burnoutData?.length ?? 0) > 0 && (
-        <Card data-testid="card-sr-burnout-list">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Flame className="w-4 h-4 text-orange-500" />
-                Employees at Burnout Risk
-              </CardTitle>
-              <Link href="/executive">
-                <Button variant="ghost" size="sm">
-                  View Details <ArrowRight className="w-3 h-3 ml-1" />
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {burnoutData?.slice(0, 6).map((risk: any) => (
-                <div key={risk.userId} className="flex items-center gap-3" data-testid={`alert-sr-burnout-${risk.userId}`}>
-                  <Avatar className="w-7 h-7">
-                    <AvatarFallback className="text-xs">
-                      {risk.fullName?.split(" ").map((n: string) => n[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{risk.fullName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {risk.department}
-                      {risk.managerEmail ? ` / ${getManagerName(risk.managerEmail, allUsersArr)}` : ""}
-                    </p>
-                  </div>
-                  <Badge variant="destructive" className="text-xs shrink-0">
-                    {risk.dropPercentage}% drop
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-display font-bold text-foreground" data-testid="text-mgr-feedback-title">
-            Anonymous Manager Feedback
-          </h2>
-          <Badge variant="secondary">Confidential</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Employee-submitted anonymous feedback about their managers. Submitter identities are never revealed.
-        </p>
-
-        {summaryLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1,2,3].map(i => <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>)}
-          </div>
-        ) : mgrFeedbackSummary && mgrFeedbackSummary.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mgrFeedbackSummary.map((mgr: any, idx: number) => (
-              <Card key={mgr.managerEmail || idx} className="border-border/50 overflow-visible cursor-pointer hover-elevate" onClick={() => setMgrFeedbackFilter(mgr.managerEmail)} data-testid={`card-mgr-summary-${idx}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-9 h-9">
-                      <AvatarFallback className="text-sm">{getManagerInitials(mgr.managerEmail, allUsersArr)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{mgr.managerName || mgr.managerEmail?.split("@")[0]}</p>
-                      <p className="text-xs text-muted-foreground">{mgr.deptCode || "—"}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-lg font-bold ${getRatingColor(mgr.avgRating)}`}>{mgr.avgRating}</p>
-                      <p className="text-xs text-muted-foreground">{mgr.totalFeedback} reviews</p>
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(mgr.avgRating / 5) * 100}%` }} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card className="border-border/50">
-            <CardContent className="py-8 text-center">
-              <ShieldCheck className="w-10 h-10 mx-auto text-muted-foreground/30 mb-2" />
-              <p className="text-sm text-muted-foreground">No anonymous manager feedback has been submitted yet.</p>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card data-testid="card-mgr-feedback-detail">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-base flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-primary" />
-                Feedback Details
-              </CardTitle>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select value={mgrFeedbackFilter} onValueChange={setMgrFeedbackFilter}>
-                  <SelectTrigger className="w-[180px]" data-testid="select-mgr-filter">
-                    <SelectValue placeholder="All Managers" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Managers</SelectItem>
-                    {mgrFeedbackSummary?.map((mgr: any) => (
-                      <SelectItem key={mgr.managerEmail} value={mgr.managerEmail}>
-                        {mgr.managerName || mgr.managerEmail?.split("@")[0]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={mgrFeedbackPeriod} onValueChange={setMgrFeedbackPeriod}>
-                  <SelectTrigger className="w-[140px]" data-testid="select-mgr-period">
-                    <SelectValue placeholder="All Periods" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Periods</SelectItem>
-                    {periodOptions.map(p => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {feedbackListLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
-            ) : !mgrFeedbackList || mgrFeedbackList.length === 0 ? (
-              <div className="text-center py-6">
-                <MessageSquare className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">No feedback entries found for the selected filters.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {mgrFeedbackList.map((entry: any, idx: number) => (
-                  <div key={entry.id || idx} className="border border-border rounded-md p-4 space-y-2" data-testid={`row-mgr-feedback-${idx}`}>
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <Avatar className="w-7 h-7">
-                          <AvatarFallback className="text-xs">{getManagerInitials(entry.managerEmail, allUsersArr)}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm font-medium">{entry.managerName || entry.managerEmail?.split("@")[0]}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={getRatingBadgeVariant(entry.rating)}>
-                          <Star className="w-3 h-3 mr-1" />
-                          {entry.rating}/5
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">{entry.submissionPeriod}</Badge>
-                      </div>
-                    </div>
-                    <p className="text-sm text-foreground/80 pl-9">{entry.feedbackText}</p>
-                    <p className="text-xs text-muted-foreground pl-9 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      Anonymous submission
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
