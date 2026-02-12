@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   Star,
   Eye,
+  MessageSquare,
 } from "lucide-react";
 
 function generatePeriodOptions(): string[] {
@@ -125,6 +126,16 @@ export default function EmployeeFeedback() {
       return all.find((f: any) => f.id === periodCheck?.feedbackId);
     },
     enabled: !!periodCheck?.feedbackId && (isEditing || isViewing),
+  });
+
+  const { data: managerReview } = useQuery<any>({
+    queryKey: ["/api/reviews", periodCheck?.feedbackId],
+    queryFn: async () => {
+      const res = await fetch(`/api/reviews/${periodCheck?.feedbackId}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!periodCheck?.feedbackId && isViewing && isReviewed,
   });
 
   useEffect(() => {
@@ -366,37 +377,69 @@ export default function EmployeeFeedback() {
                   How You Were Feeling
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
-                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-primary" /> Work Satisfaction
-                    </span>
-                    <Badge variant={getScaleVariant(existingFeedback.satScore, 10)} data-testid="view-badge-sat">
-                      {SAT_LABELS[existingFeedback.satScore - 1]} ({existingFeedback.satScore}/10)
-                    </Badge>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-primary" /> Work Satisfaction
+                      </span>
+                      <Badge variant={getScaleVariant(existingFeedback.satScore, 10)} data-testid="view-badge-sat">
+                        {SAT_LABELS[existingFeedback.satScore - 1]}
+                      </Badge>
+                    </div>
+                    {managerReview?.mgrSatComment && (
+                      <div className="flex items-start gap-2 p-2 bg-emerald-500/5 rounded-md border border-emerald-500/20 ml-4">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span className="text-xs text-muted-foreground">{managerReview.mgrSatComment}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <Smile className="w-4 h-4 text-amber-500" /> Overall Mood
-                    </span>
-                    <Badge variant={getScaleVariant(MOOD_LABELS.indexOf(existingFeedback.moodScore) + 1, 5)} data-testid="view-badge-mood">
-                      {existingFeedback.moodScore}
-                    </Badge>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Smile className="w-4 h-4 text-amber-500" /> Overall Mood
+                      </span>
+                      <Badge variant={getScaleVariant(MOOD_LABELS.indexOf(existingFeedback.moodScore) + 1, 5)} data-testid="view-badge-mood">
+                        {existingFeedback.moodScore}
+                      </Badge>
+                    </div>
+                    {managerReview?.mgrMoodComment && (
+                      <div className="flex items-start gap-2 p-2 bg-emerald-500/5 rounded-md border border-emerald-500/20 ml-4">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span className="text-xs text-muted-foreground">{managerReview.mgrMoodComment}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <Scale className="w-4 h-4 text-violet-500" /> Workload Level
-                    </span>
-                    <Badge variant={getInverseScaleVariant(existingFeedback.workloadLevel, 5)} data-testid="view-badge-workload">
-                      {WORKLOAD_LABELS[existingFeedback.workloadLevel - 1]} ({existingFeedback.workloadLevel}/5)
-                    </Badge>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <Scale className="w-4 h-4 text-violet-500" /> Workload Level
+                      </span>
+                      <Badge variant={getInverseScaleVariant(existingFeedback.workloadLevel, 5)} data-testid="view-badge-workload">
+                        {WORKLOAD_LABELS[existingFeedback.workloadLevel - 1]}
+                      </Badge>
+                    </div>
+                    {managerReview?.mgrWorkloadComment && (
+                      <div className="flex items-start gap-2 p-2 bg-emerald-500/5 rounded-md border border-emerald-500/20 ml-4">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span className="text-xs text-muted-foreground">{managerReview.mgrWorkloadComment}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <HeartHandshake className="w-4 h-4 text-rose-500" /> Work-Life Balance
-                    </span>
-                    <Badge variant={getScaleVariant(existingFeedback.workLifeBalance, 5)} data-testid="view-badge-balance">
-                      {BALANCE_LABELS[existingFeedback.workLifeBalance - 1]} ({existingFeedback.workLifeBalance}/5)
-                    </Badge>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 p-3 bg-background rounded-md">
+                      <span className="text-sm font-medium flex items-center gap-2">
+                        <HeartHandshake className="w-4 h-4 text-rose-500" /> Work-Life Balance
+                      </span>
+                      <Badge variant={getScaleVariant(existingFeedback.workLifeBalance, 5)} data-testid="view-badge-balance">
+                        {BALANCE_LABELS[existingFeedback.workLifeBalance - 1]}
+                      </Badge>
+                    </div>
+                    {managerReview?.mgrWlbComment && (
+                      <div className="flex items-start gap-2 p-2 bg-emerald-500/5 rounded-md border border-emerald-500/20 ml-4">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span className="text-xs text-muted-foreground">{managerReview.mgrWlbComment}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -408,12 +451,12 @@ export default function EmployeeFeedback() {
                 </h3>
                 <div className="space-y-4">
                   {[
-                    { label: "Key Accomplishments", icon: Trophy, color: "text-amber-500", value: existingFeedback.accomplishments },
-                    { label: "Top Disappointments", icon: ThumbsDown, color: "text-slate-500", value: existingFeedback.disappointments },
-                    { label: "Blockers & Risks", icon: AlertCircle, color: "text-rose-500", value: existingFeedback.blockers },
-                    { label: "Mentoring & Culture", icon: Users, color: "text-teal-500", value: existingFeedback.mentoringCulture },
+                    { label: "Key Accomplishments", icon: Trophy, color: "text-amber-500", value: existingFeedback.accomplishments, comment: managerReview?.mgrAccComment },
+                    { label: "Top Disappointments", icon: ThumbsDown, color: "text-slate-500", value: existingFeedback.disappointments, comment: managerReview?.mgrDisComment },
+                    { label: "Blockers & Risks", icon: AlertCircle, color: "text-rose-500", value: existingFeedback.blockers, comment: managerReview?.mgrBlockersComment },
+                    { label: "Mentoring & Culture", icon: Users, color: "text-teal-500", value: existingFeedback.mentoringCulture, comment: managerReview?.mgrMentoringComment },
                   ].map((item) => (
-                    <div key={item.label} className="space-y-1">
+                    <div key={item.label} className="space-y-2">
                       <Label className="flex items-center gap-2 text-sm">
                         <item.icon className={`w-4 h-4 ${item.color}`} />
                         {item.label}
@@ -421,6 +464,15 @@ export default function EmployeeFeedback() {
                       <div className="p-3 bg-muted/30 rounded-md border border-border/50 text-sm text-foreground whitespace-pre-wrap" data-testid={`view-text-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
                         {item.value || <span className="text-muted-foreground italic">No response provided</span>}
                       </div>
+                      {item.comment && (
+                        <div className="flex items-start gap-2 p-2.5 bg-emerald-500/5 rounded-md border border-emerald-500/20 ml-4">
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Manager's Comment</span>
+                            <p className="text-xs text-muted-foreground mt-0.5">{item.comment}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -433,12 +485,12 @@ export default function EmployeeFeedback() {
                 </h3>
                 <div className="space-y-4">
                   {[
-                    { label: "Support Needs", icon: HeartHandshake, color: "text-blue-500", value: existingFeedback.supportNeeds },
-                    { label: "Goal Progress", icon: Target, color: "text-emerald-500", value: existingFeedback.goalProgress },
-                    { label: "Process Suggestions", icon: Lightbulb, color: "text-amber-500", value: existingFeedback.processSuggestions },
-                    { label: "PTO & Coverage", icon: CalendarDays, color: "text-indigo-500", value: existingFeedback.ptoCoverage },
+                    { label: "Support Needs", icon: HeartHandshake, color: "text-blue-500", value: existingFeedback.supportNeeds, comment: managerReview?.mgrSupportComment },
+                    { label: "Goal Progress", icon: Target, color: "text-emerald-500", value: existingFeedback.goalProgress, comment: managerReview?.mgrGoalComment },
+                    { label: "Process Suggestions", icon: Lightbulb, color: "text-amber-500", value: existingFeedback.processSuggestions, comment: managerReview?.mgrSuggestionsComment },
+                    { label: "PTO & Coverage", icon: CalendarDays, color: "text-indigo-500", value: existingFeedback.ptoCoverage, comment: managerReview?.mgrPtoComment },
                   ].map((item) => (
-                    <div key={item.label} className="space-y-1">
+                    <div key={item.label} className="space-y-2">
                       <Label className="flex items-center gap-2 text-sm">
                         <item.icon className={`w-4 h-4 ${item.color}`} />
                         {item.label}
@@ -446,6 +498,15 @@ export default function EmployeeFeedback() {
                       <div className="p-3 bg-muted/30 rounded-md border border-border/50 text-sm text-foreground whitespace-pre-wrap" data-testid={`view-text-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
                         {item.value || <span className="text-muted-foreground italic">No response provided</span>}
                       </div>
+                      {item.comment && (
+                        <div className="flex items-start gap-2 p-2.5 bg-emerald-500/5 rounded-md border border-emerald-500/20 ml-4">
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Manager's Comment</span>
+                            <p className="text-xs text-muted-foreground mt-0.5">{item.comment}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -455,7 +516,7 @@ export default function EmployeeFeedback() {
                 <section className="space-y-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4" />
-                    Anonymous Manager Feedback
+                    Your Anonymous Manager Feedback
                   </h3>
                   <Card className="border-border/50 bg-muted/30">
                     <CardContent className="pt-4 space-y-3">
