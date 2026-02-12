@@ -542,24 +542,17 @@ export default function ProjectAnalysis() {
                           <h3 className="font-semibold text-sm text-foreground">{proj}</h3>
                           <Badge variant="secondary" className="text-xs">{items.length} blocker{items.length !== 1 ? "s" : ""}</Badge>
                         </div>
-                        <div className="space-y-2 pl-6">
+                        <ul className="space-y-1.5 pl-6">
                           {items.slice(0, 5).map((item, idx) => (
-                            <div key={idx} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <Badge
-                                  variant={item.sentiment >= 7 ? "default" : item.sentiment >= 5 ? "secondary" : "destructive"}
-                                  className={`text-xs min-w-[3rem] justify-center ${item.sentiment >= 7 ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}`}
-                                >
-                                  {item.sentiment.toFixed(1)}
-                                </Badge>
-                              </div>
+                            <li key={idx} className="flex items-start gap-2 py-1.5 border-b border-border/50 last:border-0">
+                              <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${item.sentiment < 3 ? "text-destructive" : item.sentiment < 5 ? "text-orange-500" : "text-muted-foreground"}`} />
                               <p className="text-sm text-muted-foreground leading-relaxed">{item.blockers}</p>
-                            </div>
+                            </li>
                           ))}
                           {items.length > 5 && (
-                            <p className="text-xs text-muted-foreground pl-1">+{items.length - 5} more blockers in {proj}</p>
+                            <li className="text-xs text-muted-foreground pl-5">+{items.length - 5} more blockers in {proj}</li>
                           )}
-                        </div>
+                        </ul>
                       </div>
                     ))}
                   </div>
