@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Heart, Award, Star, Users, Lightbulb, Zap,
   HandHeart, Trophy, Send, Eye, EyeOff, Search,
-  Crown, Medal
+  Crown, Medal, User, ArrowUpRight, ArrowDownLeft
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -112,6 +112,28 @@ export default function KudosWall() {
     return assignRanks(withCount);
   }, [leaderboard]);
 
+  const { data: myKudos, isLoading: myKudosLoading } = useQuery<any[]>({
+    queryKey: ["/api/kudos/user", user?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/kudos/user/${user?.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch my kudos");
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+
+  const myReceivedKudos = useMemo(() => {
+    if (!myKudos || !user) return [];
+    return myKudos.filter((k: any) => k.receiverUserId === user.id);
+  }, [myKudos, user]);
+
+  const mySentKudos = useMemo(() => {
+    if (!myKudos || !user) return [];
+    return myKudos.filter((k: any) => k.giverUserId === user.id);
+  }, [myKudos, user]);
+
+  const [myKudosSubTab, setMyKudosSubTab] = useState<"received" | "sent">("received");
+
   const { data: allUsers } = useQuery<any[]>({
     queryKey: ["/api/users"],
     queryFn: async () => {
@@ -152,6 +174,7 @@ export default function KudosWall() {
       setIsAnonymous(false);
       queryClient.invalidateQueries({ queryKey: ["/api/kudos/recent"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kudos/leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/kudos/user"] });
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
@@ -299,6 +322,9 @@ export default function KudosWall() {
           <TabsTrigger value="wall" data-testid="tab-kudos-wall">
             <Heart className="w-4 h-4 mr-1.5" /> Wall
           </TabsTrigger>
+          <TabsTrigger value="mykudos" data-testid="tab-kudos-mykudos">
+            <User className="w-4 h-4 mr-1.5" /> My Kudos
+          </TabsTrigger>
           <TabsTrigger value="leaderboard" data-testid="tab-kudos-leaderboard">
             <Trophy className="w-4 h-4 mr-1.5" /> Leaderboard
           </TabsTrigger>
@@ -374,6 +400,107 @@ export default function KudosWall() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="mykudos" className="mt-6 space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              variant={myKudosSubTab === "received" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMyKudosSubTab("received")}
+              data-testid="button-my-received"
+            >
+              <ArrowDownLeft className="w-3.5 h-3.5 mr-1.5" />
+              Received ({myReceivedKudos.length})
+            </Button>
+            <Button
+              variant={myKudosSubTab === "sent" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMyKudosSubTab("sent")}
+              data-testid="button-my-sent"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
+              Sent ({mySentKudos.length})
+            </Button>
+          </div>
+
+          {myKudosLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1,2,3].map(i => (
+                <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+              ))}
+            </div>
+          ) : (() => {
+            const items = myKudosSubTab === "received" ? myReceivedKudos : mySentKudos;
+            if (items.length === 0) {
+              return (
+                <Card className="border-border/50">
+                  <CardContent className="py-12 text-center">
+                    {myKudosSubTab === "received" ? (
+                      <>
+                        <ArrowDownLeft className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                        <p className="text-lg font-medium text-foreground">No kudos received yet</p>
+                        <p className="text-sm text-muted-foreground">Keep up the great work and recognition will follow!</p>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUpRight className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                        <p className="text-lg font-medium text-foreground">No kudos sent yet</p>
+                        <p className="text-sm text-muted-foreground">Recognize a colleague to get started!</p>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            }
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {items.map((k: any) => (
+                  <Card key={k.id} className="border-border/50 overflow-visible" data-testid={`card-mykudos-${k.id}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-9 w-9 shrink-0">
+                          <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                            {myKudosSubTab === "received"
+                              ? (k.isAnonymous ? "?" : getInitials(k.giverName))
+                              : getInitials(k.receiverName)
+                            }
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {myKudosSubTab === "received" ? (
+                              <>
+                                <span className="text-sm font-semibold text-foreground">
+                                  {k.isAnonymous ? "Someone" : k.giverName}
+                                </span>
+                                <span className="text-xs text-muted-foreground">recognized you</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-xs text-muted-foreground">You recognized</span>
+                                <span className="text-sm font-semibold text-primary">{k.receiverName}</span>
+                              </>
+                            )}
+                          </div>
+                          <p className="text-sm text-foreground/80">{k.message}</p>
+                          <div className="flex items-center gap-2 flex-wrap pt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {getValueIcon(k.valueTag)}
+                              <span className="ml-1">{k.valueTag}</span>
+                            </Badge>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              {k.createdAt ? formatDistanceToNow(new Date(k.createdAt), { addSuffix: true }) : ""}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
         </TabsContent>
 
         <TabsContent value="leaderboard" className="mt-6 space-y-4">
