@@ -7,7 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ManagerDashboard from "@/pages/ManagerDashboard";
 import ExecutiveDashboard from "@/pages/ExecutiveDashboard";
-import EmployeeDashboard from "@/pages/EmployeeDashboard";
+import EmployeeFeedback from "@/pages/EmployeeFeedback";
 import AdminPanel from "@/pages/AdminPanel";
 import { Sidebar } from "@/components/Sidebar";
 
@@ -28,8 +28,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/my-feedback">
-         <AuthenticatedLayout><EmployeeDashboard /></AuthenticatedLayout>
+      <Route path="/submit-feedback">
+         <AuthenticatedLayout><EmployeeFeedback /></AuthenticatedLayout>
       </Route>
       <Route path="/team-radar">
          <AuthenticatedLayout><ManagerDashboard /></AuthenticatedLayout>

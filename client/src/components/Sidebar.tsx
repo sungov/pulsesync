@@ -29,8 +29,8 @@ export function Sidebar() {
       roles: ["EMPLOYEE", "MANAGER", "SENIOR_MGMT"],
     },
     {
-      label: "My Feedback",
-      href: "/my-feedback",
+      label: "Submit Feedback",
+      href: "/submit-feedback",
       icon: ListTodo,
       roles: ["EMPLOYEE"],
     },

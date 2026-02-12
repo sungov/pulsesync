@@ -1,465 +1,457 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useFeedbackList, useCreateFeedback, useActionItems } from "@/hooks/use-pulse-data";
-import { Button } from "@/components/ui/button";
+import { useFeedbackList, useActionItems } from "@/hooks/use-pulse-data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { SyncLoader } from "@/components/SyncLoader";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format, subMonths, isAfter, parseISO } from "date-fns";
 import {
-  Trophy,
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-  ThumbsDown,
-  Users,
-  HeartHandshake,
-  Target,
-  Lightbulb,
-  CalendarDays,
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from "recharts";
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
   Activity,
   Briefcase,
-  Scale,
   Smile,
+  Scale,
+  HeartHandshake,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  ListTodo,
+  BarChart3,
+  User,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import type { Feedback } from "@shared/schema";
 
-const MOOD_LABELS = ["Burned Out", "Challenged", "Neutral", "Good", "Great"] as const;
-const SAT_LABELS = ["Very Dissatisfied", "Dissatisfied", "Somewhat Dissatisfied", "Slightly Dissatisfied", "Mixed", "Slightly Satisfied", "Somewhat Satisfied", "Satisfied", "Very Satisfied", "Thriving"] as const;
-const WORKLOAD_LABELS = ["Under-utilized", "Light", "Balanced", "Heavy", "Overwhelmed"] as const;
-const BALANCE_LABELS = ["Poor", "Fair", "Okay", "Good", "Excellent"] as const;
+const MOOD_MAP: Record<string, number> = {
+  "Burned Out": 1,
+  "Challenged": 2,
+  "Neutral": 3,
+  "Good": 4,
+  "Great": 5,
+};
 
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+const PERIOD_OPTIONS = [
+  { value: "3", label: "Last 3 months" },
+  { value: "6", label: "Last 6 months" },
+  { value: "12", label: "Last 12 months" },
+  { value: "all", label: "All time" },
+];
 
-function getScaleVariant(value: number, max: number): BadgeVariant {
-  const ratio = value / max;
-  if (ratio <= 0.3) return "destructive";
-  if (ratio <= 0.6) return "secondary";
-  return "default";
-}
+function TrendIndicator({ current, previous }: { current: number; previous: number | null }) {
+  if (previous === null) return null;
+  const diff = current - previous;
+  const pct = previous !== 0 ? Math.round((diff / previous) * 100) : 0;
 
-function getInverseScaleVariant(value: number, max: number): BadgeVariant {
-  const ratio = value / max;
-  if (ratio <= 0.4) return "default";
-  if (ratio <= 0.7) return "secondary";
-  return "destructive";
+  if (Math.abs(pct) < 3) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Minus className="w-3 h-3" /> Stable
+      </span>
+    );
+  }
+
+  if (diff > 0) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-emerald-600">
+        <TrendingUp className="w-3 h-3" /> +{pct}%
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-1 text-xs text-rose-600">
+      <TrendingDown className="w-3 h-3" /> {pct}%
+    </span>
+  );
 }
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
-  const [satScore, setSatScore] = useState([7]);
-  const [moodIndex, setMoodIndex] = useState([3]);
-  const [workloadLevel, setWorkloadLevel] = useState([3]);
-  const [workLifeBalance, setWorkLifeBalance] = useState([3]);
-  const [accomplishments, setAccomplishments] = useState("");
-  const [disappointments, setDisappointments] = useState("");
-  const [blockers, setBlockers] = useState("");
-  const [mentoringCulture, setMentoringCulture] = useState("");
-  const [supportNeeds, setSupportNeeds] = useState("");
-  const [goalProgress, setGoalProgress] = useState("");
-  const [processSuggestions, setProcessSuggestions] = useState("");
-  const [ptoCoverage, setPtoCoverage] = useState("");
+  const [periodMonths, setPeriodMonths] = useState("6");
 
-  const createFeedback = useCreateFeedback();
-  const { data: myActionItems } = useActionItems(user?.email ?? undefined);
+  const { data: allFeedback, isLoading: feedbackLoading } = useFeedbackList(user?.id);
+  const { data: actionItems, isLoading: actionsLoading } = useActionItems(user?.email ?? undefined);
 
-  const currentPeriod = format(new Date(), "MMM-yyyy");
+  const filteredFeedback = useMemo(() => {
+    if (!allFeedback) return [];
+    if (periodMonths === "all") return [...allFeedback].reverse();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    const moodScore = MOOD_LABELS[moodIndex[0] - 1];
+    const cutoff = subMonths(new Date(), parseInt(periodMonths));
+    return [...allFeedback]
+      .filter((f: Feedback) => f.createdAt && isAfter(new Date(f.createdAt), cutoff))
+      .reverse();
+  }, [allFeedback, periodMonths]);
 
-    await new Promise(r => setTimeout(r, 800));
+  const chartData = useMemo(() => {
+    return filteredFeedback.map((f: Feedback) => ({
+      period: f.submissionPeriod,
+      date: f.createdAt ? format(new Date(f.createdAt), "MMM d") : f.submissionPeriod,
+      satisfaction: f.satScore,
+      mood: MOOD_MAP[f.moodScore] || 3,
+      moodLabel: f.moodScore,
+      workload: f.workloadLevel,
+      balance: f.workLifeBalance,
+      sentiment: f.aiSentiment ? Math.round(f.aiSentiment * 100) : null,
+    }));
+  }, [filteredFeedback]);
 
-    createFeedback.mutate({
-      userId: user.id,
-      submissionPeriod: currentPeriod,
-      satScore: satScore[0],
-      moodScore,
-      workloadLevel: workloadLevel[0],
-      workLifeBalance: workLifeBalance[0],
-      accomplishments,
-      disappointments,
-      blockers,
-      mentoringCulture,
-      supportNeeds,
-      goalProgress,
-      processSuggestions,
-      ptoCoverage,
-    }, {
-      onSuccess: () => {
-        setAccomplishments("");
-        setDisappointments("");
-        setBlockers("");
-        setMentoringCulture("");
-        setSupportNeeds("");
-        setGoalProgress("");
-        setProcessSuggestions("");
-        setPtoCoverage("");
-        setSatScore([7]);
-        setMoodIndex([3]);
-        setWorkloadLevel([3]);
-        setWorkLifeBalance([3]);
-      }
-    });
-  };
+  const latest = filteredFeedback.length > 0 ? filteredFeedback[filteredFeedback.length - 1] : null;
+  const previous = filteredFeedback.length > 1 ? filteredFeedback[filteredFeedback.length - 2] : null;
 
+  const relevantActions = useMemo(() => {
+    if (!actionItems || !user?.email) return [];
+    return actionItems.filter((item: any) => item.empEmail === user.email);
+  }, [actionItems, user?.email]);
+
+  const pendingActions = relevantActions.filter((a: any) => a.status === "Pending");
+  const overdueActions = relevantActions.filter((a: any) => {
+    return a.status === "Pending" && new Date(a.dueDate) < new Date();
+  });
+
+  const isLoading = feedbackLoading || actionsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 bg-muted rounded w-1/3" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-muted rounded-lg" />)}
+        </div>
+        <div className="h-64 bg-muted rounded-lg" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {createFeedback.isPending && <SyncLoader />}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <header>
+          <h1 className="text-3xl font-display font-bold text-foreground" data-testid="text-dashboard-greeting">
+            Hello, {user?.firstName}
+          </h1>
+          <p className="text-muted-foreground mt-1">Your performance overview at a glance.</p>
+        </header>
 
-      <header>
-        <h1 className="text-3xl font-display font-bold text-foreground" data-testid="text-greeting">
-          Hello, {user?.firstName}
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Here's your pulse check for <span className="font-semibold text-primary">{currentPeriod}</span>.
-        </p>
-      </header>
+        <Select value={periodMonths} onValueChange={setPeriodMonths}>
+          <SelectTrigger className="w-[180px]" data-testid="select-period">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PERIOD_OPTIONS.map(opt => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-border/50 shadow-sm overflow-visible">
-            <div className="h-2 bg-gradient-to-r from-primary to-indigo-400 rounded-t-md" />
-            <CardHeader>
-              <CardTitle>Weekly Check-in</CardTitle>
-              <CardDescription>Share your wins and challenges to help us support you better.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-10">
-                <section className="space-y-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Activity className="w-4 h-4" />
-                    How are you feeling?
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 bg-muted/30 rounded-lg border border-border/50">
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center flex-wrap gap-1">
-                        <Label className="text-base font-semibold flex items-center gap-2">
-                          <Briefcase className="w-4 h-4 text-primary" />
-                          Work Satisfaction
-                        </Label>
-                        <Badge
-                          variant={getScaleVariant(satScore[0], 10)}
-                          data-testid="badge-sat-score"
-                        >
-                          {SAT_LABELS[satScore[0] - 1]}
-                        </Badge>
-                      </div>
-                      <Slider
-                        value={satScore}
-                        onValueChange={setSatScore}
-                        min={1}
-                        max={10}
-                        step={1}
-                        className="py-2"
-                        data-testid="slider-sat-score"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Very Dissatisfied</span>
-                        <span>Thriving</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center flex-wrap gap-1">
-                        <Label className="text-base font-semibold flex items-center gap-2">
-                          <Smile className="w-4 h-4 text-amber-500" />
-                          Overall Mood
-                        </Label>
-                        <Badge
-                          variant={getScaleVariant(moodIndex[0], 5)}
-                          data-testid="badge-mood-value"
-                        >
-                          {MOOD_LABELS[moodIndex[0] - 1]}
-                        </Badge>
-                      </div>
-                      <Slider
-                        value={moodIndex}
-                        onValueChange={setMoodIndex}
-                        min={1}
-                        max={5}
-                        step={1}
-                        className="py-2"
-                        data-testid="slider-mood"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Burned Out</span>
-                        <span>Great</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center flex-wrap gap-1">
-                        <Label className="text-base font-semibold flex items-center gap-2">
-                          <Scale className="w-4 h-4 text-violet-500" />
-                          Workload Level
-                        </Label>
-                        <Badge
-                          variant={getInverseScaleVariant(workloadLevel[0], 5)}
-                          data-testid="badge-workload"
-                        >
-                          {WORKLOAD_LABELS[workloadLevel[0] - 1]}
-                        </Badge>
-                      </div>
-                      <Slider
-                        value={workloadLevel}
-                        onValueChange={setWorkloadLevel}
-                        min={1}
-                        max={5}
-                        step={1}
-                        className="py-2"
-                        data-testid="slider-workload"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Under-utilized</span>
-                        <span>Overwhelmed</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center flex-wrap gap-1">
-                        <Label className="text-base font-semibold flex items-center gap-2">
-                          <HeartHandshake className="w-4 h-4 text-rose-500" />
-                          Work-Life Balance
-                        </Label>
-                        <Badge
-                          variant={getScaleVariant(workLifeBalance[0], 5)}
-                          data-testid="badge-balance"
-                        >
-                          {BALANCE_LABELS[workLifeBalance[0] - 1]}
-                        </Badge>
-                      </div>
-                      <Slider
-                        value={workLifeBalance}
-                        onValueChange={setWorkLifeBalance}
-                        min={1}
-                        max={5}
-                        step={1}
-                        className="py-2"
-                        data-testid="slider-balance"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Poor</span>
-                        <span>Excellent</span>
-                      </div>
-                    </div>
+      {filteredFeedback.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <BarChart3 className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+            <p className="text-lg font-medium text-foreground mb-1">No feedback yet</p>
+            <p className="text-sm text-muted-foreground">Submit your first pulse check to see your performance dashboard.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card data-testid="card-stat-satisfaction">
+              <CardContent className="pt-6 pb-4 px-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Briefcase className="w-4 h-4 text-primary" />
                   </div>
-                </section>
-
-                <section className="space-y-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Trophy className="w-4 h-4" />
-                    Performance Narrative
-                  </h3>
-                  <div className="space-y-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="accomplishments" className="flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-500" />
-                        Key Accomplishments
-                      </Label>
-                      <p className="text-xs text-muted-foreground">What did you achieve? This builds the narrative for your manager's review.</p>
-                      <Textarea
-                        id="accomplishments"
-                        placeholder="e.g. I completed the migration of the XYZ database 2 days ahead of schedule."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={accomplishments}
-                        onChange={(e) => setAccomplishments(e.target.value)}
-                        required
-                        data-testid="textarea-accomplishments"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="disappointments" className="flex items-center gap-2">
-                        <ThumbsDown className="w-4 h-4 text-slate-500" />
-                        Top Disappointments
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Identifies hidden friction points your manager should know about.</p>
-                      <Textarea
-                        id="disappointments"
-                        placeholder="e.g. I felt the communication during the last sprint was unclear."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={disappointments}
-                        onChange={(e) => setDisappointments(e.target.value)}
-                        required
-                        data-testid="textarea-disappointments"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="blockers" className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-500" />
-                        Blockers & Risks
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Critical blockers can automatically suggest a Manager Action Item.</p>
-                      <Textarea
-                        id="blockers"
-                        placeholder="e.g. Waiting on IT for server access; it's delaying the launch."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={blockers}
-                        onChange={(e) => setBlockers(e.target.value)}
-                        required
-                        data-testid="textarea-blockers"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="mentoringCulture" className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-teal-500" />
-                        Mentoring & Culture
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Measures organizational citizenship beyond just tasks.</p>
-                      <Textarea
-                        id="mentoringCulture"
-                        placeholder="e.g. I helped the new intern get up to speed with our Python stack."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={mentoringCulture}
-                        onChange={(e) => setMentoringCulture(e.target.value)}
-                        required
-                        data-testid="textarea-mentoring"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                <section className="space-y-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4" />
-                    Growth & Planning
-                  </h3>
-                  <div className="space-y-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="supportNeeds" className="flex items-center gap-2">
-                        <HeartHandshake className="w-4 h-4 text-blue-500" />
-                        Support Needs
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Direct requests for resources, training, or help.</p>
-                      <Textarea
-                        id="supportNeeds"
-                        placeholder="e.g. I need a training budget for the Advanced Snowflake course."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={supportNeeds}
-                        onChange={(e) => setSupportNeeds(e.target.value)}
-                        required
-                        data-testid="textarea-support"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="goalProgress" className="flex items-center gap-2">
-                        <Target className="w-4 h-4 text-emerald-500" />
-                        Goal Progress
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Keeps performance tracking continuous rather than annual.</p>
-                      <Textarea
-                        id="goalProgress"
-                        placeholder="e.g. 70% complete on the Q1 automation goal."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={goalProgress}
-                        onChange={(e) => setGoalProgress(e.target.value)}
-                        required
-                        data-testid="textarea-goals"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="processSuggestions" className="flex items-center gap-2">
-                        <Lightbulb className="w-4 h-4 text-amber-500" />
-                        Process Suggestions
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Empowers you to improve how the company works.</p>
-                      <Textarea
-                        id="processSuggestions"
-                        placeholder="e.g. We should move our stand-ups to 10 AM to accommodate the team."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={processSuggestions}
-                        onChange={(e) => setProcessSuggestions(e.target.value)}
-                        required
-                        data-testid="textarea-suggestions"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="ptoCoverage" className="flex items-center gap-2">
-                        <CalendarDays className="w-4 h-4 text-indigo-500" />
-                        PTO & Coverage
-                      </Label>
-                      <p className="text-xs text-muted-foreground">Essential for team planning and workload management.</p>
-                      <Textarea
-                        id="ptoCoverage"
-                        placeholder="e.g. Planning to take 3 days off in late March."
-                        className="min-h-[100px] resize-none focus-visible:ring-primary"
-                        value={ptoCoverage}
-                        onChange={(e) => setPtoCoverage(e.target.value)}
-                        required
-                        data-testid="textarea-pto"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                <div className="flex justify-end pt-4">
-                  <Button
-                    type="submit"
-                    size="lg"
-                    disabled={createFeedback.isPending}
-                    className="w-full md:w-auto font-semibold shadow-lg shadow-primary/25 transition-all"
-                    data-testid="button-submit-feedback"
-                  >
-                    Submit Weekly Pulse
-                  </Button>
+                  {previous && (
+                    <TrendIndicator current={latest!.satScore} previous={previous.satScore} />
+                  )}
                 </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+                <p className="text-2xl font-bold text-foreground">{latest?.satScore}/10</p>
+                <p className="text-xs text-muted-foreground mt-1">Work Satisfaction</p>
+              </CardContent>
+            </Card>
 
-        <div className="space-y-6">
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary" />
-                Action Items
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!myActionItems?.length ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>All caught up!</p>
+            <Card data-testid="card-stat-mood">
+              <CardContent className="pt-6 pb-4 px-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-amber-500/10">
+                    <Smile className="w-4 h-4 text-amber-500" />
+                  </div>
+                  {previous && (
+                    <TrendIndicator
+                      current={MOOD_MAP[latest!.moodScore] || 3}
+                      previous={MOOD_MAP[previous.moodScore] || 3}
+                    />
+                  )}
                 </div>
-              ) : (
-                myActionItems.map((item: any) => (
-                  <motion.div
+                <p className="text-2xl font-bold text-foreground">{latest?.moodScore}</p>
+                <p className="text-xs text-muted-foreground mt-1">Overall Mood</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-stat-workload">
+              <CardContent className="pt-6 pb-4 px-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-violet-500/10">
+                    <Scale className="w-4 h-4 text-violet-500" />
+                  </div>
+                  {previous && (
+                    <TrendIndicator current={latest!.workloadLevel} previous={previous.workloadLevel} />
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-foreground">{latest?.workloadLevel}/5</p>
+                <p className="text-xs text-muted-foreground mt-1">Workload Level</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-stat-balance">
+              <CardContent className="pt-6 pb-4 px-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-rose-500/10">
+                    <HeartHandshake className="w-4 h-4 text-rose-500" />
+                  </div>
+                  {previous && (
+                    <TrendIndicator current={latest!.workLifeBalance} previous={previous.workLifeBalance} />
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-foreground">{latest?.workLifeBalance}/5</p>
+                <p className="text-xs text-muted-foreground mt-1">Work-Life Balance</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card data-testid="chart-satisfaction-trend">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  Satisfaction & AI Sentiment
+                </CardTitle>
+                <CardDescription>Your satisfaction score and AI-analyzed sentiment over time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="satGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "12px" }} />
+                      <Area
+                        type="monotone"
+                        dataKey="satisfaction"
+                        stroke="hsl(var(--primary))"
+                        fill="url(#satGrad)"
+                        strokeWidth={2}
+                        name="Satisfaction"
+                        dot={{ r: 3 }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="sentiment"
+                        stroke="hsl(var(--chart-2))"
+                        fill="url(#sentGrad)"
+                        strokeWidth={2}
+                        name="AI Sentiment %"
+                        dot={{ r: 3 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="chart-mood-balance">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Smile className="w-4 h-4 text-amber-500" />
+                  Mood & Work-Life Balance
+                </CardTitle>
+                <CardDescription>Tracking your mood and balance trends</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <YAxis domain={[1, 5]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                        formatter={(value: number, name: string) => {
+                          if (name === "Mood") {
+                            const labels = ["", "Burned Out", "Challenged", "Neutral", "Good", "Great"];
+                            return [labels[value] || value, name];
+                          }
+                          return [value, name];
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "12px" }} />
+                      <Line
+                        type="monotone"
+                        dataKey="mood"
+                        stroke="hsl(var(--chart-4))"
+                        strokeWidth={2}
+                        name="Mood"
+                        dot={{ r: 4, fill: "hsl(var(--chart-4))" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="balance"
+                        stroke="hsl(var(--chart-5))"
+                        strokeWidth={2}
+                        name="Balance"
+                        dot={{ r: 4, fill: "hsl(var(--chart-5))" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2" data-testid="chart-workload">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-violet-500" />
+                  Workload Over Time
+                </CardTitle>
+                <CardDescription>1 = Under-utilized, 3 = Balanced, 5 = Overwhelmed</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                        formatter={(value: number) => {
+                          const labels = ["", "Under-utilized", "Light", "Balanced", "Heavy", "Overwhelmed"];
+                          return [`${labels[value]} (${value}/5)`, "Workload"];
+                        }}
+                      />
+                      <Bar
+                        dataKey="workload"
+                        fill="hsl(var(--chart-3))"
+                        radius={[4, 4, 0, 0]}
+                        name="Workload"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      <Card data-testid="card-action-items">
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ListTodo className="w-4 h-4 text-primary" />
+              Action Items from 1:1 Discussions
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {overdueActions.length > 0 && (
+                <Badge variant="destructive" data-testid="badge-overdue-count">
+                  <AlertTriangle className="w-3 h-3 mr-1" />
+                  {overdueActions.length} overdue
+                </Badge>
+              )}
+              {pendingActions.length > 0 && (
+                <Badge variant="secondary" data-testid="badge-pending-count">
+                  {pendingActions.length} pending
+                </Badge>
+              )}
+            </div>
+          </div>
+          <CardDescription>Tasks from your manager discussions, for both you and your manager</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {relevantActions.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <CheckCircle2 className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm">No action items yet. They'll appear here after your 1:1 meetings.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {relevantActions.map((item: any) => {
+                const isOverdue = item.status === "Pending" && new Date(item.dueDate) < new Date();
+                const isForEmployee = item.assignedTo === "EMPLOYEE";
+                return (
+                  <div
                     key={item.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 rounded-lg border border-border bg-card transition-colors group"
+                    className="flex items-start gap-4 p-4 rounded-lg border border-border bg-card"
                     data-testid={`card-action-item-${item.id}`}
                   >
-                    <div className="flex justify-between items-start mb-2 flex-wrap gap-1">
-                      <Badge variant={item.status === "Completed" ? "outline" : "default"} className={item.status === "Completed" ? "text-green-600 border-green-200" : ""}>
-                        {item.status}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        Due {format(new Date(item.dueDate), "MMM d")}
-                      </span>
+                    <div className="p-2 rounded-lg bg-muted/50 mt-0.5">
+                      {isForEmployee ? (
+                        <User className="w-4 h-4 text-primary" />
+                      ) : (
+                        <User className="w-4 h-4 text-violet-500" />
+                      )}
                     </div>
-                    <p className="font-medium text-sm text-foreground mb-1">{item.task}</p>
-                    <p className="text-xs text-muted-foreground">From: {item.mgrEmail}</p>
-                  </motion.div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <Badge
+                          variant={item.status === "Completed" ? "outline" : isOverdue ? "destructive" : "default"}
+                        >
+                          {isOverdue ? "Overdue" : item.status}
+                        </Badge>
+                        <Badge variant="secondary">
+                          {isForEmployee ? "For You" : "For Manager"}
+                        </Badge>
+                      </div>
+                      <p className="font-medium text-sm text-foreground mt-2">{item.task}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          Due {format(new Date(item.dueDate), "MMM d, yyyy")}
+                        </span>
+                        <span>Manager: {item.mgrEmail}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
