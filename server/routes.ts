@@ -175,7 +175,7 @@ export async function registerRoutes(
   });
 
   app.get("/api/feedback/check-period", isAuthenticated, async (req, res) => {
-    const userId = (req as any).user?.id;
+    const userId = (req.session as any)?.userId;
     const period = req.query.period as string;
     if (!userId || !period) {
       return res.status(400).json({ message: "period is required" });
