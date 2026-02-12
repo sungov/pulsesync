@@ -18,7 +18,7 @@ const currentPeriod = format(new Date(), "MMM-yyyy");
 
 export default function SeniorMgmtOverview() {
   const { user } = useAuth();
-  const { data: deptData, isLoading: deptLoading } = useDepartmentAnalytics(currentPeriod);
+  const { data: deptData, isLoading: deptLoading } = useDepartmentAnalytics();
   const { data: leaderData, isLoading: leaderLoading } = useLeaderAccountability();
   const { data: burnoutData, isLoading: burnoutLoading } = useBurnoutRadar();
   const { data: reportees, isLoading: reporteesLoading } = useUsersList(undefined, user?.email || "");
@@ -33,7 +33,17 @@ export default function SeniorMgmtOverview() {
   const totalManagers = useMemo(() =>
     allUsers?.filter((u: any) => u.role === "MANAGER").length ?? 0, [allUsers]);
 
-  const totalDepts = useMemo(() => deptData?.length ?? 0, [deptData]);
+  const totalDepts = useMemo(() => {
+    if (!allUsers) return 0;
+    const depts = new Set((allUsers as any[]).map((u: any) => u.deptCode).filter(Boolean));
+    return depts.size;
+  }, [allUsers]);
+
+  const totalProjects = useMemo(() => {
+    if (!allUsers) return 0;
+    const projects = new Set((allUsers as any[]).map((u: any) => u.projectCode).filter(Boolean));
+    return projects.size;
+  }, [allUsers]);
 
   const orgAvgSat = useMemo(() => {
     if (!deptData || deptData.length === 0) return "—";
@@ -86,7 +96,7 @@ export default function SeniorMgmtOverview() {
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <>
                 <div className="text-2xl font-bold">{totalEmployees}</div>
-                <p className="text-xs text-muted-foreground">{totalManagers} managers, {totalDepts} departments</p>
+                <p className="text-xs text-muted-foreground">{totalManagers} managers, {totalDepts} depts, {totalProjects} projects</p>
               </>
             )}
           </CardContent>

@@ -80,6 +80,49 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/admin/users/:id", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { firstName, lastName, email, deptCode, projectCode, managerEmail, role, password } = req.body;
+      const updates: any = {};
+      if (firstName !== undefined) updates.firstName = firstName;
+      if (lastName !== undefined) updates.lastName = lastName;
+      if (email !== undefined) {
+        if (typeof email !== "string" || !email.includes("@")) {
+          return res.status(400).json({ message: "Invalid email format" });
+        }
+        const existing = await storage.getUserByEmail(email);
+        if (existing && existing.id !== req.params.id) {
+          return res.status(409).json({ message: "Another user with this email already exists" });
+        }
+        updates.email = email;
+      }
+      if (deptCode !== undefined) updates.deptCode = deptCode || null;
+      if (projectCode !== undefined) updates.projectCode = projectCode || null;
+      if (managerEmail !== undefined) updates.managerEmail = managerEmail || null;
+      if (role) {
+        if (!["EMPLOYEE", "MANAGER", "SENIOR_MGMT"].includes(role)) {
+          return res.status(400).json({ message: "Invalid role" });
+        }
+        updates.role = role;
+      }
+      if (password) {
+        if (password.length < 6) {
+          return res.status(400).json({ message: "Password must be at least 6 characters" });
+        }
+        updates.password = await bcrypt.hash(password, 10);
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
+      const updated = await storage.updateUser(req.params.id as string, updates);
+      const { password: _, ...safe } = updated;
+      res.json(safe);
+    } catch (err) {
+      console.error("Admin update user error:", err);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
   app.patch("/api/admin/users/:id/role", isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { role } = req.body;

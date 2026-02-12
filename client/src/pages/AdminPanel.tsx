@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, UserCheck, Shield, Trash2, Users } from "lucide-react";
+import { Loader2, Plus, UserCheck, Shield, Trash2, Users, Pencil } from "lucide-react";
 
 type AdminUser = {
   id: string;
@@ -31,6 +31,9 @@ export default function AdminPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newFirstName, setNewFirstName] = useState("");
@@ -39,6 +42,15 @@ export default function AdminPanel() {
   const [newDeptCode, setNewDeptCode] = useState("");
   const [newManagerEmail, setNewManagerEmail] = useState("");
   const [newProjectCode, setNewProjectCode] = useState("");
+
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState("EMPLOYEE");
+  const [editDeptCode, setEditDeptCode] = useState("");
+  const [editProjectCode, setEditProjectCode] = useState("");
+  const [editManagerEmail, setEditManagerEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
 
   const { data: allUsers, isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
@@ -51,33 +63,13 @@ export default function AdminPanel() {
 
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/admin/users/${id}/approve`, {
-        method: "PATCH",
-        credentials: "include",
-      });
+      const res = await fetch(`/api/admin/users/${id}/approve`, { method: "PATCH", credentials: "include" });
       if (!res.ok) throw new Error("Failed to approve");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({ title: "User Approved", description: "User can now log in." });
-    },
-  });
-
-  const roleMutation = useMutation({
-    mutationFn: async ({ id, role }: { id: string; role: string }) => {
-      const res = await fetch(`/api/admin/users/${id}/role`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to update role");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Role Updated" });
     },
   });
 
@@ -100,10 +92,7 @@ export default function AdminPanel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/admin/users/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();
     },
@@ -130,20 +119,80 @@ export default function AdminPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setAddDialogOpen(false);
-      setNewEmail("");
-      setNewPassword("");
-      setNewFirstName("");
-      setNewLastName("");
-      setNewRole("EMPLOYEE");
-      setNewDeptCode("");
-      setNewProjectCode("");
-      setNewManagerEmail("");
+      resetAddForm();
       toast({ title: "User Created", description: "New user has been added and auto-approved." });
     },
     onError: (err) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const editUserMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to update user");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditDialogOpen(false);
+      setEditingUser(null);
+      toast({ title: "User Updated", description: "User details have been saved." });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function resetAddForm() {
+    setNewEmail("");
+    setNewPassword("");
+    setNewFirstName("");
+    setNewLastName("");
+    setNewRole("EMPLOYEE");
+    setNewDeptCode("");
+    setNewProjectCode("");
+    setNewManagerEmail("");
+  }
+
+  function openEditDialog(u: AdminUser) {
+    setEditingUser(u);
+    setEditFirstName(u.firstName || "");
+    setEditLastName(u.lastName || "");
+    setEditEmail(u.email || "");
+    setEditRole(u.role);
+    setEditDeptCode(u.deptCode || "");
+    setEditProjectCode(u.projectCode || "");
+    setEditManagerEmail(u.managerEmail || "");
+    setEditPassword("");
+    setEditDialogOpen(true);
+  }
+
+  function handleEditSave() {
+    if (!editingUser) return;
+    const data: any = {
+      firstName: editFirstName,
+      lastName: editLastName,
+      email: editEmail,
+      role: editRole,
+      deptCode: editDeptCode,
+      projectCode: editProjectCode,
+      managerEmail: editManagerEmail,
+    };
+    if (editPassword.length > 0) {
+      data.password = editPassword;
+    }
+    editUserMutation.mutate({ id: editingUser.id, data });
+  }
 
   const pendingUsers = allUsers?.filter(u => !u.isApproved) || [];
   const approvedUsers = allUsers?.filter(u => u.isApproved) || [];
@@ -172,6 +221,7 @@ export default function AdminPanel() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New User</DialogTitle>
+              <DialogDescription>Create a new user account with role and department assignment.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4">
@@ -195,9 +245,7 @@ export default function AdminPanel() {
               <div className="space-y-2">
                 <Label>Role</Label>
                 <Select value={newRole} onValueChange={setNewRole}>
-                  <SelectTrigger data-testid="select-admin-role">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger data-testid="select-admin-role"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EMPLOYEE">Employee</SelectItem>
                     <SelectItem value="MANAGER">Manager</SelectItem>
@@ -205,16 +253,18 @@ export default function AdminPanel() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Department Code</Label>
-                <Input data-testid="input-admin-dept" value={newDeptCode} onChange={e => setNewDeptCode(e.target.value)} placeholder="ENG, HR, SALES..." />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Department</Label>
+                  <Input data-testid="input-admin-dept" value={newDeptCode} onChange={e => setNewDeptCode(e.target.value)} placeholder="ENG, HR..." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Project</Label>
+                  <Input data-testid="input-admin-project" value={newProjectCode} onChange={e => setNewProjectCode(e.target.value)} placeholder="Alpha, Beta..." />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Project (optional)</Label>
-                <Input data-testid="input-admin-project" value={newProjectCode} onChange={e => setNewProjectCode(e.target.value)} placeholder="Project Alpha, Internal Tools..." />
-              </div>
-              <div className="space-y-2">
-                <Label>Manager Email (optional)</Label>
+                <Label>Manager Email</Label>
                 <Input data-testid="input-admin-manager-email" value={newManagerEmail} onChange={e => setNewManagerEmail(e.target.value)} placeholder="manager@company.com" />
               </div>
             </div>
@@ -241,6 +291,71 @@ export default function AdminPanel() {
         </Dialog>
       </header>
 
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update user details. Leave password blank to keep the current password.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>First Name</Label>
+                <Input data-testid="input-edit-first-name" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Last Name</Label>
+                <Input data-testid="input-edit-last-name" value={editLastName} onChange={e => setEditLastName(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input data-testid="input-edit-email" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <Input data-testid="input-edit-password" type="password" value={editPassword} onChange={e => setEditPassword(e.target.value)} placeholder="Leave blank to keep current" />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger data-testid="select-edit-role"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                  <SelectItem value="MANAGER">Manager</SelectItem>
+                  <SelectItem value="SENIOR_MGMT">Senior Management</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Input data-testid="input-edit-dept" value={editDeptCode} onChange={e => setEditDeptCode(e.target.value)} placeholder="ENG, HR..." />
+              </div>
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Input data-testid="input-edit-project" value={editProjectCode} onChange={e => setEditProjectCode(e.target.value)} placeholder="Alpha, Beta..." />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Manager Email</Label>
+              <Input data-testid="input-edit-manager-email" value={editManagerEmail} onChange={e => setEditManagerEmail(e.target.value)} placeholder="manager@company.com" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button
+              data-testid="button-edit-save"
+              onClick={handleEditSave}
+              disabled={editUserMutation.isPending || !editEmail}
+            >
+              {editUserMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {pendingUsers.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -265,21 +380,10 @@ export default function AdminPanel() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      data-testid={`button-approve-${u.id}`}
-                      onClick={() => approveMutation.mutate(u.id)}
-                      disabled={approveMutation.isPending}
-                    >
+                    <Button size="sm" data-testid={`button-approve-${u.id}`} onClick={() => approveMutation.mutate(u.id)} disabled={approveMutation.isPending}>
                       Approve
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      data-testid={`button-reject-${u.id}`}
-                      onClick={() => deleteMutation.mutate(u.id)}
-                      className="text-destructive"
-                    >
+                    <Button size="sm" variant="outline" data-testid={`button-reject-${u.id}`} onClick={() => deleteMutation.mutate(u.id)} className="text-destructive">
                       Reject
                     </Button>
                   </div>
@@ -295,23 +399,24 @@ export default function AdminPanel() {
           <Users className="w-5 h-5 text-primary" />
           All Users ({approvedUsers.length})
         </h2>
-        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-card border border-border rounded-md overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">User</th>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Department</th>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Project</th>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Role</th>
-                  <th className="px-6 py-4 text-left font-medium text-muted-foreground">Admin</th>
-                  <th className="px-6 py-4 text-right font-medium text-muted-foreground">Actions</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">User</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Dept</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Project</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Manager</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Admin</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
                 {approvedUsers.map(u => (
                   <tr key={u.id} className="hover:bg-muted/20 transition-colors" data-testid={`row-user-${u.id}`}>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar className="w-8 h-8">
                           <AvatarFallback className="text-xs bg-primary/10 text-primary">
@@ -324,24 +429,13 @@ export default function AdminPanel() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{u.deptCode || "-"}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{u.projectCode || "-"}</td>
-                    <td className="px-6 py-4">
-                      <Select
-                        value={u.role}
-                        onValueChange={(role) => roleMutation.mutate({ id: u.id, role })}
-                      >
-                        <SelectTrigger className="w-[140px]" data-testid={`select-role-${u.id}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                          <SelectItem value="MANAGER">Manager</SelectItem>
-                          <SelectItem value="SENIOR_MGMT">Senior Mgmt</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <td className="px-4 py-3 text-muted-foreground">{u.deptCode || "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{u.projectCode || "-"}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs truncate max-w-[140px]">{u.managerEmail || "-"}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="secondary" className="text-xs">{u.role === "SENIOR_MGMT" ? "Sr. Mgmt" : u.role === "MANAGER" ? "Manager" : "Employee"}</Badge>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-3">
                       <Badge
                         variant={u.isAdmin ? "default" : "outline"}
                         className={`cursor-pointer ${u.id === user?.id ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -352,25 +446,31 @@ export default function AdminPanel() {
                           }
                         }}
                       >
-                        {u.isAdmin ? (
-                          <><Shield className="w-3 h-3 mr-1" /> Admin</>
-                        ) : (
-                          "User"
-                        )}
+                        {u.isAdmin ? (<><Shield className="w-3 h-3 mr-1" /> Admin</>) : "User"}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      {u.id !== user?.id && (
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
-                          data-testid={`button-delete-${u.id}`}
-                          onClick={() => deleteMutation.mutate(u.id)}
-                          className="text-muted-foreground hover:text-destructive"
+                          data-testid={`button-edit-${u.id}`}
+                          onClick={() => openEditDialog(u)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Pencil className="w-4 h-4" />
                         </Button>
-                      )}
+                        {u.id !== user?.id && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            data-testid={`button-delete-${u.id}`}
+                            onClick={() => deleteMutation.mutate(u.id)}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

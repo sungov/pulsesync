@@ -97,13 +97,14 @@ export default function ExecutiveDashboard() {
   }, [selectedDept, usersData]);
 
   const orgSummary = useMemo(() => {
-    const employees = (usersData as any[])?.filter((u: any) => u.role === "EMPLOYEE").length ?? 0;
-    const managers = (usersData as any[])?.filter((u: any) => u.role === "MANAGER").length ?? 0;
-    const depts = deptData?.length ?? 0;
-    const projects = projectData?.length ?? 0;
+    const allUsersArr = (usersData as any[]) || [];
+    const employees = allUsersArr.filter((u: any) => u.role === "EMPLOYEE").length;
+    const managers = allUsersArr.filter((u: any) => u.role === "MANAGER").length;
+    const depts = new Set(allUsersArr.map((u: any) => u.deptCode).filter(Boolean)).size;
+    const projects = new Set(allUsersArr.map((u: any) => u.projectCode).filter(Boolean)).size;
     const burnoutCount = burnoutData?.length ?? 0;
     return { employees, managers, depts, projects, burnoutCount };
-  }, [usersData, deptData, projectData, burnoutData]);
+  }, [usersData, burnoutData]);
 
   if (selectedDept) {
     return (
