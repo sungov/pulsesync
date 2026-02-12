@@ -63,8 +63,8 @@ export default function Landing() {
             <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(45, 127, 249, 0.12)" }}>
               <ShieldCheck className="w-5 h-5" style={{ color: "#2d7ff9" }} />
             </div>
-            <h3 className="font-semibold text-sm" style={{ color: "#0a1628" }}>Enterprise Secure</h3>
-            <p className="text-xs" style={{ color: "#5a6f87" }}>SOC2 compliant data handling with encryption.</p>
+            <h3 className="font-semibold text-sm" style={{ color: "#0a1628" }}>Role-Based Access</h3>
+            <p className="text-xs" style={{ color: "#5a6f87" }}>Secure dashboards tailored for every role.</p>
           </div>
           <div className="space-y-2">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(45, 127, 249, 0.12)" }}>
