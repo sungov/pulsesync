@@ -1,7 +1,7 @@
-import { type User, type UpsertUser, type InsertFeedback, type Feedback, type InsertManagerReview, type ManagerReview, type InsertActionItem, type ActionItem, type UpdateActionItemRequest } from "@shared/schema";
+import { type User, type UpsertUser, type InsertFeedback, type Feedback, type InsertManagerReview, type ManagerReview, type InsertActionItem, type ActionItem, type UpdateActionItemRequest, type InsertKudos, type Kudos, type InsertManagerFeedback, type ManagerFeedbackEntry } from "@shared/schema";
 import { db } from "./db";
-import { users, feedback, managerReviews, actionItems } from "@shared/schema";
-import { eq, and, or, desc, sql } from "drizzle-orm";
+import { users, feedback, managerReviews, actionItems, kudos, managerFeedback } from "@shared/schema";
+import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -39,6 +39,16 @@ export interface IStorage {
   getProjectAnalytics(period?: string): Promise<any[]>;
   getProjectAnalyticsForPeriods(periods: string[]): Promise<any[]>;
   getEmployeePerformanceSummary(filterField: string, filterValue: string): Promise<any[]>;
+
+  createKudos(data: InsertKudos): Promise<Kudos>;
+  getRecentKudos(limit?: number): Promise<any[]>;
+  getKudosLeaderboard(startDate: Date, endDate: Date): Promise<any[]>;
+  getKudosByUser(userId: string): Promise<any[]>;
+
+  createManagerFeedback(data: InsertManagerFeedback): Promise<ManagerFeedbackEntry>;
+  getManagerFeedbackBySubmitter(userId: string, period: string): Promise<ManagerFeedbackEntry | undefined>;
+  getManagerFeedbackForSenior(managerEmail?: string, period?: string): Promise<any[]>;
+  getManagerFeedbackSummary(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -351,6 +361,120 @@ export class DatabaseStorage implements IStorage {
       ) perf ON true
       WHERE ${fieldColumn} = ${filterValue} AND u.is_admin = false AND u.role = 'EMPLOYEE'
       ORDER BY COALESCE(perf.latest_sentiment, 0) DESC
+    `);
+    return result.rows;
+  }
+
+  async createKudos(data: InsertKudos): Promise<Kudos> {
+    const [newItem] = await db.insert(kudos).values(data).returning();
+    return newItem;
+  }
+
+  async getRecentKudos(limit: number = 20): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        k.id,
+        k.message,
+        k.value_tag as "valueTag",
+        k.is_anonymous as "isAnonymous",
+        k.created_at as "createdAt",
+        k.giver_user_id as "giverUserId",
+        k.receiver_user_id as "receiverUserId",
+        CONCAT(gr.first_name, ' ', gr.last_name) as "giverName",
+        CONCAT(rc.first_name, ' ', rc.last_name) as "receiverName",
+        rc.dept_code as "receiverDept"
+      FROM kudos k
+      JOIN users gr ON k.giver_user_id = gr.id
+      JOIN users rc ON k.receiver_user_id = rc.id
+      ORDER BY k.created_at DESC
+      LIMIT ${limit}
+    `);
+    return result.rows;
+  }
+
+  async getKudosLeaderboard(startDate: Date, endDate: Date): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        k.receiver_user_id as "userId",
+        CONCAT(u.first_name, ' ', u.last_name) as "fullName",
+        u.dept_code as "deptCode",
+        u.role,
+        COUNT(k.id) as "kudosCount"
+      FROM kudos k
+      JOIN users u ON k.receiver_user_id = u.id
+      WHERE k.created_at >= ${startDate} AND k.created_at <= ${endDate}
+      GROUP BY k.receiver_user_id, u.first_name, u.last_name, u.dept_code, u.role
+      ORDER BY COUNT(k.id) DESC
+    `);
+    return result.rows;
+  }
+
+  async getKudosByUser(userId: string): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        k.id,
+        k.message,
+        k.value_tag as "valueTag",
+        k.is_anonymous as "isAnonymous",
+        k.created_at as "createdAt",
+        k.giver_user_id as "giverUserId",
+        k.receiver_user_id as "receiverUserId",
+        CONCAT(gr.first_name, ' ', gr.last_name) as "giverName",
+        CONCAT(rc.first_name, ' ', rc.last_name) as "receiverName"
+      FROM kudos k
+      JOIN users gr ON k.giver_user_id = gr.id
+      JOIN users rc ON k.receiver_user_id = rc.id
+      WHERE k.giver_user_id = ${userId} OR k.receiver_user_id = ${userId}
+      ORDER BY k.created_at DESC
+    `);
+    return result.rows;
+  }
+
+  async createManagerFeedback(data: InsertManagerFeedback): Promise<ManagerFeedbackEntry> {
+    const [newItem] = await db.insert(managerFeedback).values(data).returning();
+    return newItem;
+  }
+
+  async getManagerFeedbackBySubmitter(userId: string, period: string): Promise<ManagerFeedbackEntry | undefined> {
+    const [result] = await db.select().from(managerFeedback)
+      .where(and(eq(managerFeedback.submitterUserId, userId), eq(managerFeedback.submissionPeriod, period)));
+    return result;
+  }
+
+  async getManagerFeedbackForSenior(mgrEmail?: string, period?: string): Promise<any[]> {
+    const conditions = [];
+    if (mgrEmail) conditions.push(sql`mf.manager_email = ${mgrEmail}`);
+    if (period) conditions.push(sql`mf.submission_period = ${period}`);
+    const whereClause = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
+    const result = await db.execute(sql`
+      SELECT 
+        mf.id,
+        mf.manager_email as "managerEmail",
+        mf.feedback_text as "feedbackText",
+        mf.rating,
+        mf.submission_period as "submissionPeriod",
+        mf.created_at as "createdAt",
+        CONCAT(mgr.first_name, ' ', mgr.last_name) as "managerName"
+      FROM manager_feedback mf
+      LEFT JOIN users mgr ON mgr.email = mf.manager_email
+      ${whereClause}
+      ORDER BY mf.created_at DESC
+    `);
+    return result.rows;
+  }
+
+  async getManagerFeedbackSummary(): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        mf.manager_email as "managerEmail",
+        CONCAT(mgr.first_name, ' ', mgr.last_name) as "managerName",
+        mgr.dept_code as "deptCode",
+        COUNT(mf.id) as "totalFeedback",
+        ROUND(AVG(mf.rating)::numeric, 1) as "avgRating"
+      FROM manager_feedback mf
+      LEFT JOIN users mgr ON mgr.email = mf.manager_email
+      GROUP BY mf.manager_email, mgr.first_name, mgr.last_name, mgr.dept_code
+      ORDER BY AVG(mf.rating) ASC
     `);
     return result.rows;
   }

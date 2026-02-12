@@ -12,6 +12,7 @@ import AdminPanel from "@/pages/AdminPanel";
 import ReviewFeedback from "@/pages/ReviewFeedback";
 import EmployeeProgress from "@/pages/EmployeeProgress";
 import ResetPassword from "@/pages/ResetPassword";
+import KudosWall from "@/pages/KudosWall";
 import { Sidebar } from "@/components/Sidebar";
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,9 @@ function Router() {
       </Route>
       <Route path="/employee-progress/:userId">
          <AuthenticatedLayout><EmployeeProgress /></AuthenticatedLayout>
+      </Route>
+      <Route path="/kudos">
+         <AuthenticatedLayout><KudosWall /></AuthenticatedLayout>
       </Route>
       <Route path="/reset-password" component={ResetPassword} />
       <Route component={NotFound} />

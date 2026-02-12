@@ -693,5 +693,148 @@ export async function registerRoutes(
     res.json(safeData);
   });
 
+  // === KUDOS ROUTES ===
+
+  const createKudosSchema = z.object({
+    receiverUserId: z.string(),
+    message: z.string().min(1).max(500),
+    valueTag: z.string().min(1),
+    isAnonymous: z.boolean().default(false),
+  });
+
+  app.post("/api/kudos", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const parsed = createKudosSchema.parse(req.body);
+      if (parsed.receiverUserId === user.id) {
+        return res.status(400).json({ message: "You cannot give kudos to yourself" });
+      }
+      const receiver = await storage.getUser(parsed.receiverUserId);
+      if (!receiver) {
+        return res.status(404).json({ message: "Receiver not found" });
+      }
+      const newKudos = await storage.createKudos({
+        giverUserId: user.id,
+        receiverUserId: parsed.receiverUserId,
+        message: parsed.message,
+        valueTag: parsed.valueTag,
+        isAnonymous: parsed.isAnonymous,
+      });
+      res.status(201).json(newKudos);
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ message: "Validation failed", errors: err.errors });
+      }
+      res.status(500).json({ message: err.message || "Failed to create kudos" });
+    }
+  });
+
+  app.get("/api/kudos/recent", isAuthenticated, async (req, res) => {
+    const limit = parseInt(req.query.limit as string) || 20;
+    const data = await storage.getRecentKudos(limit);
+    res.json(data);
+  });
+
+  app.get("/api/kudos/leaderboard", isAuthenticated, async (req, res) => {
+    const range = (req.query.range as string) || "month";
+    const now = new Date();
+    let startDate: Date;
+
+    if (range === "quarter") {
+      const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+      startDate = quarterStart;
+    } else if (range === "year") {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const data = await storage.getKudosLeaderboard(startDate, now);
+    const result = data.map((d: any) => ({
+      userId: d.userId,
+      fullName: d.fullName,
+      deptCode: d.deptCode,
+      role: d.role,
+      kudosCount: Number(d.kudosCount),
+    }));
+    res.json(result);
+  });
+
+  app.get("/api/kudos/user/:userId", isAuthenticated, async (req, res) => {
+    const data = await storage.getKudosByUser(req.params.userId);
+    res.json(data);
+  });
+
+  // === MANAGER FEEDBACK (Anonymous) ROUTES ===
+
+  const createManagerFeedbackSchema = z.object({
+    managerEmail: z.string().email(),
+    feedbackText: z.string().min(1).max(2000),
+    rating: z.number().int().min(1).max(5),
+    submissionPeriod: z.string(),
+  });
+
+  app.post("/api/manager-feedback", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (user.role !== "EMPLOYEE" && user.role !== "MANAGER") {
+        return res.status(403).json({ message: "Only employees and managers can submit manager feedback" });
+      }
+      const parsed = createManagerFeedbackSchema.parse(req.body);
+      const existing = await storage.getManagerFeedbackBySubmitter(user.id, parsed.submissionPeriod);
+      if (existing) {
+        return res.status(409).json({ message: "You have already submitted manager feedback for this period" });
+      }
+      const entry = await storage.createManagerFeedback({
+        submitterUserId: user.id,
+        managerEmail: parsed.managerEmail,
+        feedbackText: parsed.feedbackText,
+        rating: parsed.rating,
+        submissionPeriod: parsed.submissionPeriod,
+      });
+      res.status(201).json({ message: "Manager feedback submitted anonymously" });
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ message: "Validation failed", errors: err.errors });
+      }
+      res.status(500).json({ message: err.message || "Failed to submit manager feedback" });
+    }
+  });
+
+  app.get("/api/manager-feedback", isAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    if (user.role !== "SENIOR_MGMT" && !user.isAdmin) {
+      return res.status(403).json({ message: "Only senior management can view manager feedback" });
+    }
+    const managerEmail = req.query.managerEmail as string | undefined;
+    const period = req.query.period as string | undefined;
+    const data = await storage.getManagerFeedbackForSenior(managerEmail, period);
+    res.json(data);
+  });
+
+  app.get("/api/manager-feedback/summary", isAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    if (user.role !== "SENIOR_MGMT" && !user.isAdmin) {
+      return res.status(403).json({ message: "Only senior management can view manager feedback summary" });
+    }
+    const data = await storage.getManagerFeedbackSummary();
+    const result = data.map((d: any) => ({
+      managerEmail: d.managerEmail,
+      managerName: d.managerName,
+      deptCode: d.deptCode,
+      totalFeedback: Number(d.totalFeedback),
+      avgRating: Number(d.avgRating),
+    }));
+    res.json(result);
+  });
+
+  app.get("/api/manager-feedback/check", isAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    const period = req.query.period as string;
+    if (!period) return res.status(400).json({ message: "period is required" });
+    const existing = await storage.getManagerFeedbackBySubmitter(user.id, period);
+    res.json({ submitted: !!existing });
+  });
+
   return httpServer;
 }

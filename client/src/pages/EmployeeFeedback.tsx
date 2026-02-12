@@ -29,6 +29,8 @@ import {
   Lock,
   Pencil,
   ChevronDown,
+  ShieldCheck,
+  Star,
 } from "lucide-react";
 
 function generatePeriodOptions(): string[] {
@@ -76,6 +78,9 @@ export default function EmployeeFeedback() {
   const [processSuggestions, setProcessSuggestions] = useState("");
   const [ptoCoverage, setPtoCoverage] = useState("");
 
+  const [mgrFeedbackText, setMgrFeedbackText] = useState("");
+  const [mgrRating, setMgrRating] = useState([3]);
+
   const createFeedback = useCreateFeedback();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -97,6 +102,17 @@ export default function EmployeeFeedback() {
 
   const alreadySubmitted = periodCheck?.exists ?? false;
   const isReviewed = periodCheck?.reviewed ?? false;
+
+  const { data: mgrFeedbackCheck } = useQuery<{ submitted: boolean }>({
+    queryKey: ["/api/manager-feedback/check", selectedPeriod],
+    queryFn: async () => {
+      const res = await fetch(`/api/manager-feedback/check?period=${selectedPeriod}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to check manager feedback");
+      return res.json();
+    },
+    enabled: !!user?.id && !!user?.managerEmail,
+  });
+  const mgrFeedbackAlreadySubmitted = mgrFeedbackCheck?.submitted ?? false;
 
   const { data: existingFeedback } = useQuery<any>({
     queryKey: ["/api/feedback", periodCheck?.feedbackId],
@@ -175,7 +191,23 @@ export default function EmployeeFeedback() {
     await new Promise(r => setTimeout(r, 800));
 
     createFeedback.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: async () => {
+        if (user.managerEmail && mgrFeedbackText.trim() && !mgrFeedbackAlreadySubmitted) {
+          try {
+            await fetch("/api/manager-feedback", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                managerEmail: user.managerEmail,
+                feedbackText: mgrFeedbackText.trim(),
+                rating: mgrRating[0],
+                submissionPeriod: selectedPeriod,
+              }),
+              credentials: "include",
+            });
+            queryClient.invalidateQueries({ queryKey: ["/api/manager-feedback/check"] });
+          } catch {}
+        }
         setAccomplishments("");
         setDisappointments("");
         setBlockers("");
@@ -188,6 +220,8 @@ export default function EmployeeFeedback() {
         setMoodIndex([3]);
         setWorkloadLevel([3]);
         setWorkLifeBalance([3]);
+        setMgrFeedbackText("");
+        setMgrRating([3]);
         queryClient.invalidateQueries({ queryKey: ["/api/feedback/check-period"] });
         queryClient.invalidateQueries({ queryKey: ["/api/feedback"] });
       }
@@ -552,6 +586,72 @@ export default function EmployeeFeedback() {
                     </div>
                   </div>
                 </section>
+
+                {user?.managerEmail && !isEditing && (
+                  <section className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4" />
+                        Anonymous Manager Feedback
+                      </h3>
+                      <Badge variant="secondary">Optional</Badge>
+                    </div>
+                    <Card className="border-border/50 bg-muted/30">
+                      <CardContent className="pt-4 space-y-4">
+                        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-primary/5 rounded-md p-3">
+                          <ShieldCheck className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                          <span>
+                            This feedback is <span className="font-semibold text-foreground">completely anonymous</span>. Senior management will only see the feedback text, rating, and which manager it's about &mdash; never who submitted it.
+                          </span>
+                        </div>
+
+                        {mgrFeedbackAlreadySubmitted ? (
+                          <div className="text-center py-4">
+                            <CheckCircle2 className="w-8 h-8 mx-auto text-primary/40 mb-2" />
+                            <p className="text-sm text-muted-foreground">You've already submitted manager feedback for this period.</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2">
+                                <Star className="w-4 h-4 text-amber-500" />
+                                Rate your manager (1-5)
+                              </Label>
+                              <div className="flex items-center gap-4">
+                                <Slider
+                                  min={1}
+                                  max={5}
+                                  step={1}
+                                  value={mgrRating}
+                                  onValueChange={setMgrRating}
+                                  className="flex-1"
+                                  data-testid="slider-mgr-rating"
+                                />
+                                <Badge variant={mgrRating[0] >= 4 ? "default" : mgrRating[0] >= 3 ? "secondary" : "destructive"}>
+                                  {mgrRating[0]}/5
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="mgrFeedback" className="flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4 text-primary" />
+                                Feedback about your manager
+                              </Label>
+                              <Textarea
+                                id="mgrFeedback"
+                                placeholder="e.g. My manager is supportive but could improve on giving timely feedback..."
+                                className="min-h-[100px] resize-none focus-visible:ring-primary"
+                                value={mgrFeedbackText}
+                                onChange={(e) => setMgrFeedbackText(e.target.value)}
+                                data-testid="textarea-mgr-feedback"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </section>
+                )}
 
                 <div className="flex justify-end gap-3 pt-4">
                   {isEditing && (

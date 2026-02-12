@@ -7,7 +7,8 @@ import {
   LogOut, 
   BrainCircuit,
   Shield,
-  ChevronRight
+  ChevronRight,
+  Heart
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,12 @@ export function Sidebar() {
       href: "/team-radar",
       icon: Users,
       roles: ["MANAGER", "SENIOR_MGMT"],
+    },
+    {
+      label: "Recognition Wall",
+      href: "/kudos",
+      icon: Heart,
+      roles: ["EMPLOYEE", "MANAGER", "SENIOR_MGMT"],
     },
     {
       label: "Executive Hub",

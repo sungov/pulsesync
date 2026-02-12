@@ -69,6 +69,26 @@ export const actionItems = pgTable("action_items", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const kudos = pgTable("kudos", {
+  id: serial("id").primaryKey(),
+  giverUserId: text("giver_user_id").notNull().references(() => users.id),
+  receiverUserId: text("receiver_user_id").notNull().references(() => users.id),
+  message: text("message").notNull(),
+  valueTag: text("value_tag").notNull(),
+  isAnonymous: boolean("is_anonymous").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const managerFeedback = pgTable("manager_feedback", {
+  id: serial("id").primaryKey(),
+  submitterUserId: text("submitter_user_id").notNull().references(() => users.id),
+  managerEmail: text("manager_email").notNull(),
+  feedbackText: text("feedback_text").notNull(),
+  rating: integer("rating").notNull(),
+  submissionPeriod: text("submission_period").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 export const feedbackRelations = relations(feedback, ({ one, many }) => ({
   user: one(users, {
@@ -87,6 +107,21 @@ export const managerReviewsRelations = relations(managerReviews, ({ one }) => ({
 
 export const usersRelations = relations(users, ({ many }) => ({
   feedback: many(feedback),
+  kudosGiven: many(kudos, { relationName: "kudosGiver" }),
+  kudosReceived: many(kudos, { relationName: "kudosReceiver" }),
+}));
+
+export const kudosRelations = relations(kudos, ({ one }) => ({
+  giver: one(users, {
+    fields: [kudos.giverUserId],
+    references: [users.id],
+    relationName: "kudosGiver",
+  }),
+  receiver: one(users, {
+    fields: [kudos.receiverUserId],
+    references: [users.id],
+    relationName: "kudosReceiver",
+  }),
 }));
 
 
@@ -109,6 +144,16 @@ export const insertActionItemSchema = createInsertSchema(actionItems).omit({
   createdAt: true 
 });
 
+export const insertKudosSchema = createInsertSchema(kudos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertManagerFeedbackSchema = createInsertSchema(managerFeedback).omit({
+  id: true,
+  createdAt: true,
+});
+
 // === EXPLICIT API TYPES ===
 export type Feedback = typeof feedback.$inferSelect;
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
@@ -119,3 +164,9 @@ export type InsertManagerReview = z.infer<typeof insertManagerReviewSchema>;
 export type ActionItem = typeof actionItems.$inferSelect;
 export type InsertActionItem = z.infer<typeof insertActionItemSchema>;
 export type UpdateActionItemRequest = Partial<InsertActionItem>;
+
+export type Kudos = typeof kudos.$inferSelect;
+export type InsertKudos = z.infer<typeof insertKudosSchema>;
+
+export type ManagerFeedbackEntry = typeof managerFeedback.$inferSelect;
+export type InsertManagerFeedback = z.infer<typeof insertManagerFeedbackSchema>;
