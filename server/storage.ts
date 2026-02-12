@@ -180,6 +180,7 @@ export class DatabaseStorage implements IStorage {
         COUNT(f.id) as total_feedback
       FROM users u
       JOIN feedback f ON u.id = f.user_id
+      WHERE u.is_admin = false
       GROUP BY u.dept_code
     `);
     return result.rows;
@@ -194,7 +195,7 @@ export class DatabaseStorage implements IStorage {
           COUNT(f.id) as total_feedback
         FROM users u
         JOIN feedback f ON u.id = f.user_id
-        WHERE f.submission_period = ${period}
+        WHERE f.submission_period = ${period} AND u.is_admin = false
         GROUP BY u.dept_code
       `);
       return result.rows;
